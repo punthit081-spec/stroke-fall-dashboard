@@ -20,7 +20,7 @@ h1 {
 
 .header, .row {
     display:grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
     padding:15px;
     align-items:center;
 }
@@ -47,6 +47,11 @@ h1 {
 .dot {
     font-size:22px;
 }
+
+.checkbox {
+    transform: scale(1.4);
+    cursor:pointer;
+}
 </style>
 </head>
 
@@ -59,12 +64,17 @@ h1 {
     <div>เตียง</div>
     <div>Fall Score</div>
     <div>Risk</div>
+    <div>สับสน</div>
 </div>
 
 <div id="data"></div>
 
 <script>
-const sheetURL = "https://opensheet.elk.sh/1GWVp2xxmAEFAC3UzyUswe6GlsoO1hMyXq-KXEi7bWfw/dashboard";
+
+const sheetURL = "https://script.google.com/macros/s/AKfycbw-FcxVRFNVLhdWchNqlhJM-LfsNFSbcUBD6UwwOC6RCOEddb6BdRXPj6Pbf-083iap/exec";
+
+/* 🔥 ใส่ URL Apps Script ของเธอที่นี่ */
+const API_URL = "PUT_YOUR_APPS_SCRIPT_URL_HERE";
 
 function loadData(){
     fetch(sheetURL)
@@ -90,6 +100,11 @@ function loadData(){
                     <div class="${riskClass}">
                         <span class="dot">●</span> ${row.Risk}
                     </div>
+                    <div>
+                        <input type="checkbox" 
+                               class="checkbox"
+                               onchange="updateConfused('${row.Bed}', this)">
+                    </div>
                 </div>
             `;
         });
@@ -97,8 +112,27 @@ function loadData(){
     });
 }
 
+function updateConfused(bed, checkbox){
+
+    fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({
+            bed: bed,
+            confused: checkbox.checked
+        })
+    })
+    .then(res => res.text())
+    .then(result => {
+        console.log("Updated:", result);
+    })
+    .catch(err => {
+        console.error("Error:", err);
+    });
+}
+
 loadData();
-setInterval(loadData, 5000); // refresh ทุก 5 วิ
+setInterval(loadData, 5000);
+
 </script>
 
 </body>
