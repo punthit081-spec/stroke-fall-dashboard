@@ -16,6 +16,23 @@ h1 {
     text-align:center;
     padding:20px;
     font-size:40px;
+    margin:0;
+}
+
+.title-bar {
+    position:relative;
+}
+
+.current-count {
+    position:absolute;
+    top:24px;
+    right:28px;
+    font-size:22px;
+    background:#1f1f1f;
+    border:1px solid #3a3a3a;
+    border-radius:8px;
+    padding:10px 14px;
+    color:#6fd3ff;
 }
 
 .header, .row {
@@ -52,7 +69,10 @@ h1 {
 
 <body>
 
-<h1>Stroke Unit Fall Monitor</h1>
+<div class="title-bar">
+    <h1>Stroke Unit Fall Monitor</h1>
+    <div id="currentCount" class="current-count">จำนวนคนปัจจุบัน: 0</div>
+</div>
 
 <div class="header">
     <div>ชื่อ</div>
@@ -72,11 +92,14 @@ function loadData(){
     .then(data => {
 
         const table = document.getElementById("data");
+        const countDisplay = document.getElementById("currentCount");
         table.innerHTML = "";
+        let currentCount = 0;
 
         data.forEach(row => {
 
             if(!row.Name) return;
+            currentCount += 1;
 
             let riskClass = "low";
             if(row.Risk === "Moderate") riskClass = "moderate";
@@ -93,6 +116,8 @@ function loadData(){
                 </div>
             `;
         });
+
+        countDisplay.textContent = `จำนวนคนปัจจุบัน: ${currentCount}`;
 
     });
 }
