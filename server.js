@@ -12,8 +12,6 @@ const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-
-// Keep original Stroke Fall Monitor root index.html untouched.
 app.use('/cauti-vap', express.static(path.join(__dirname, 'public')));
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -24,10 +22,9 @@ if (supabaseUrl && supabaseKey) {
   supabase = createClient(supabaseUrl, supabaseKey);
 }
 
-const checklistKeys = [
-  ...checklistDefinition.cauti.items.map((item) => item.key),
-  ...checklistDefinition.vap.items.map((item) => item.key)
-];
+const checklistItems = [...checklistDefinition.cauti.items, ...checklistDefinition.vap.items];
+const checklistKeys = checklistItems.map((item) => item.key);
+const itemTextByKey = Object.fromEntries(checklistItems.map((item) => [item.key, item.text]));
 
 function ensureSupabase(res) {
   if (!supabase) {
@@ -44,7 +41,7 @@ app.get('/api/checklist-definition', (_, res) => {
 app.get('/api/patients', async (req, res) => {
   if (!ensureSupabase(res)) return;
 
-  let query = supabase.from('patients').select('bed_no, hn, patient_name').order('id', { ascending: true });
+  let query = supabase.from('patients').select('bed_no, hn, patient_name').order('bed_no', { ascending: true });
 
   if (req.query.bed) {
     query = query.eq('bed_no', req.query.bed);
@@ -125,6 +122,60 @@ app.get('/api/records', async (req, res) => {
   }
 
   res.json(data);
+});
+
+app.get('/api/analytics', async (req, res) => {
+  if (!ensureSupabase(res)) return;
+
+  const { startDate, endDate, section } = req.query;
+
+  let keys = checklistKeys;
+  if (section === 'cauti') keys = checklistDefinition.cauti.items.map((item) => item.key);
+  if (section === 'vap') keys = checklistDefinition.vap.items.map((item) => item.key);
+
+  let query = supabase.from('checklist_records').select(['assessment_date', ...keys].join(','));
+
+  if (startDate) query = query.gte('assessment_date', startDate);
+  if (endDate) query = query.lte('assessment_date', endDate);
+
+  const { data, error } = await query;
+
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  const totalRecords = data.length;
+  const items = keys.map((key) => {
+    const yesCount = data.filter((row) => row[key] === true).length;
+    const noCount = data.filter((row) => row[key] === false).length;
+    const yesPercent = totalRecords > 0 ? Number(((yesCount / totalRecords) * 100).toFixed(2)) : 0;
+    const noPercent = totalRecords > 0 ? Number(((noCount / totalRecords) * 100).toFixed(2)) : 0;
+
+    return {
+      key,
+      text: itemTextByKey[key],
+      yesCount,
+      noCount,
+      totalRecords,
+      yesPercent,
+      noPercent
+    };
+  });
+
+  const mostProblematic = items.reduce((worst, item) => {
+    if (!worst || item.noPercent > worst.noPercent) return item;
+    return worst;
+  }, null);
+
+  res.json({
+    startDate: startDate || null,
+    endDate: endDate || null,
+    section: section || 'all',
+    totalRecords,
+    mostProblematic,
+    items
+  });
 });
 
 app.get('/cauti-vap', (_, res) => {

@@ -19,14 +19,25 @@ create table if not exists public.checklist_records (
   cauti_4 boolean not null,
   cauti_5 boolean not null,
   cauti_6 boolean not null,
+  cauti_7 boolean not null,
+  cauti_8 boolean not null,
   vap_1 boolean not null,
   vap_2 boolean not null,
   vap_3 boolean not null,
   vap_4 boolean not null,
   vap_5 boolean not null,
   vap_6 boolean not null,
+  vap_7 boolean not null,
+  vap_8 boolean not null,
+  vap_9 boolean not null,
   created_at timestamptz not null default now()
 );
+
+alter table public.checklist_records add column if not exists cauti_7 boolean not null default false;
+alter table public.checklist_records add column if not exists cauti_8 boolean not null default false;
+alter table public.checklist_records add column if not exists vap_7 boolean not null default false;
+alter table public.checklist_records add column if not exists vap_8 boolean not null default false;
+alter table public.checklist_records add column if not exists vap_9 boolean not null default false;
 
 create index if not exists idx_checklist_records_date on public.checklist_records(assessment_date);
 create index if not exists idx_checklist_records_bed on public.checklist_records(bed_no);
