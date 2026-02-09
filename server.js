@@ -45,13 +45,15 @@ const dropdownFieldDefinitions = [
   {
     key: 'cauti_1_no_reason',
     triggerKey: 'cauti_1',
-    label: 'เหตุผล CAUTI ข้อ 1 (เมื่อเลือก ไม่ใช่)',
+    label: 'เหตุผล CAUTI ข้อ 1 (เมื่อเลือก ใช่)',
+    triggerValue: true,
     options: cauti1NoReasonOptions
   },
   {
     key: 'vap_4_no_reason',
     triggerKey: 'vap_4',
     label: 'สาเหตุ VAP ข้อ 4 (เมื่อเลือก ไม่ใช่)',
+    triggerValue: false,
     options: vap4NoReasonOptions
   }
 ];
@@ -130,9 +132,9 @@ app.post('/api/checklist', async (req, res) => {
     }
   }
 
-  if (requiredKeys.includes('cauti_1') && assessments.cauti_1 === false) {
+  if (requiredKeys.includes('cauti_1') && assessments.cauti_1 === true) {
     if (!cauti_1_no_reason || !cauti1NoReasonOptions.includes(cauti_1_no_reason)) {
-      res.status(400).json({ error: 'cauti_1_no_reason is required when cauti_1 is ไม่ใช่.' });
+      res.status(400).json({ error: 'cauti_1_no_reason is required when cauti_1 is ใช่.' });
       return;
     }
     payload.cauti_1_no_reason = cauti_1_no_reason;
@@ -306,14 +308,14 @@ app.get('/api/analytics', async (req, res) => {
 
   const dropdownSummaries = dropdownSummariesToUse.map((field) => {
     const denominator = getDenominatorByKey(field.triggerKey);
-    const noCaseRows = data.filter((row) => row[field.triggerKey] === false);
-    const totalNoCases = noCaseRows.length;
+    const matchedRows = data.filter((row) => row[field.triggerKey] === field.triggerValue);
+    const totalMatchedCases = matchedRows.length;
     const options = field.options.map((option) => {
-      const count = noCaseRows.filter((row) => row[field.key] === option).length;
+      const count = matchedRows.filter((row) => row[field.key] === option).length;
       return {
         value: option,
         count,
-        percentOfNoCases: totalNoCases > 0 ? Number(((count / totalNoCases) * 100).toFixed(2)) : 0,
+        percentOfMatchedCases: totalMatchedCases > 0 ? Number(((count / totalMatchedCases) * 100).toFixed(2)) : 0,
         percentOfAllCases: denominator > 0 ? Number(((count / denominator) * 100).toFixed(2)) : 0
       };
     });
@@ -322,7 +324,8 @@ app.get('/api/analytics', async (req, res) => {
       key: field.key,
       label: field.label,
       triggerKey: field.triggerKey,
-      totalNoCases,
+      triggerValue: field.triggerValue,
+      totalMatchedCases,
       denominator,
       totalRecords: denominator,
       options

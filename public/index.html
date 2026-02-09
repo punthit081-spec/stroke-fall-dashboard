@@ -140,7 +140,7 @@
       return ['cauti', 'vap'];
     }
 
-    function createYesNoCheckboxes(key, reasonSelect = null) {
+    function createYesNoCheckboxes(key, reasonSelect = null, reasonTrigger = 'no') {
       const wrap = document.createElement('div');
       wrap.className = 'choices';
 
@@ -154,16 +154,18 @@
 
       yes.addEventListener('change', () => {
         if (yes.checked) no.checked = false;
-        if (yes.checked && reasonSelect) {
-          reasonSelect.value = '';
-          reasonSelect.style.display = 'none';
+        if (reasonSelect) {
+          const show = reasonTrigger === 'yes' && yes.checked;
+          reasonSelect.style.display = show ? 'inline-block' : 'none';
+          if (!show) reasonSelect.value = '';
         }
       });
       no.addEventListener('change', () => {
         if (no.checked) yes.checked = false;
         if (reasonSelect) {
-          reasonSelect.style.display = no.checked ? 'inline-block' : 'none';
-          if (!no.checked) reasonSelect.value = '';
+          const show = reasonTrigger === 'no' && no.checked;
+          reasonSelect.style.display = show ? 'inline-block' : 'none';
+          if (!show) reasonSelect.value = '';
         }
       });
 
@@ -218,8 +220,8 @@
           div.appendChild(p);
 
           if (item.key === 'cauti_1') {
-            const reasonSelect = createReasonSelect('cauti_1_no_reason', '-- เลือกเหตุผลเมื่อเลือก ไม่ใช่ --', cauti1NoReasonOptions);
-            div.appendChild(createYesNoCheckboxes(item.key, reasonSelect));
+            const reasonSelect = createReasonSelect('cauti_1_no_reason', '-- เลือกเหตุผลเมื่อเลือก ใช่ --', cauti1NoReasonOptions);
+            div.appendChild(createYesNoCheckboxes(item.key, reasonSelect, 'yes'));
             div.appendChild(reasonSelect);
           } else if (item.key === 'vap_4') {
             const reasonSelect = createReasonSelect('vap_4_no_reason', '-- เลือกสถานะข้อห้ามเมื่อเลือก ไม่ใช่ --', vap4NoReasonOptions);
@@ -249,10 +251,10 @@
           if (!yes && !no) return { error: `กรุณาเลือก ใช่/ไม่ใช่ สำหรับ ${item.text}` };
           result[item.key] = yes;
 
-          if (item.key === 'cauti_1' && no) {
+          if (item.key === 'cauti_1' && yes) {
             const reasonSelect = document.getElementById('cauti_1_no_reason');
             if (!reasonSelect.value) {
-              return { error: 'กรุณาเลือกเหตุผลสำหรับข้อ 1 เมื่อเลือก ไม่ใช่' };
+              return { error: 'กรุณาเลือกเหตุผลสำหรับข้อ 1 เมื่อเลือก ใช่' };
             }
             cauti1NoReason = reasonSelect.value;
           }
@@ -360,7 +362,7 @@
           <td>
             ประเภท: ${row.assessment_scope || 'both'}<br />
             ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ
-            ${row.cauti_1 === false && row.cauti_1_no_reason ? `<br /><span class="muted">เหตุผลข้อ 1: ${row.cauti_1_no_reason}</span>` : ''}
+            ${row.cauti_1 === true && row.cauti_1_no_reason ? `<br /><span class="muted">เหตุผลข้อ 1: ${row.cauti_1_no_reason}</span>` : ''}
             ${row.vap_4 === false && row.vap_4_no_reason ? `<br /><span class="muted">ข้อ 4 ท่านอนศีรษะสูง: ${row.vap_4_no_reason}</span>` : ''}
           </td>
           <td><button type="button" class="danger-btn" data-id="${row.id}">ลบ</button></td>
@@ -405,12 +407,12 @@
         box.className = 'dropdown-summary';
 
         const title = document.createElement('div');
-        title.innerHTML = `<b>${summary.label}</b> <span class="muted">(พบกรณีตอบ ไม่ใช่ ${summary.totalNoCases}/${summary.totalRecords} เคส)</span>`;
+        title.innerHTML = `<b>${summary.label}</b> <span class="muted">(พบกรณีตรงเงื่อนไข ${summary.totalMatchedCases}/${summary.totalRecords} เคส)</span>`;
 
         const list = document.createElement('ul');
         summary.options.forEach((option) => {
           const li = document.createElement('li');
-          li.textContent = `${option.value}: ${option.count}/${summary.totalRecords} เคส (${option.percentOfAllCases}%)`;
+          li.textContent = `${option.value}: ${option.count}/${summary.totalRecords} เคส (${option.percentOfAllCases}%) | ในกลุ่มเงื่อนไข ${option.percentOfMatchedCases}%`; 
           list.appendChild(li);
         });
 
