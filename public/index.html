@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>บันทึกการประเมิน CAUTI และ VAP Bundle</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f7f8fb; color: #1f2937; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    h1,h2,h3 { margin-top: 0; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    label { font-weight: 600; }
+    select,input,button { padding: 8px 10px; border-radius: 8px; border: 1px solid #cfd6e3; }
+    button { background: #2563eb; color: #fff; border: none; cursor: pointer; }
+    button.secondary { background: #4b5563; }
+    .item { border-top: 1px solid #e5e7eb; padding: 10px 0; }
+    .choices { display: flex; gap: 16px; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; }
+    th,td { border: 1px solid #e5e7eb; padding: 8px; font-size: 14px; vertical-align: top; }
+    .muted { color: #6b7280; font-size: 13px; }
+    .success { color: #059669; }
+    .danger { color: #dc2626; font-weight: 700; }
+    .chart-row { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr 80px; gap: 10px; align-items: center; margin-bottom: 8px; }
+    .chart-track { width: 100%; background: #e5e7eb; border-radius: 999px; overflow: hidden; height: 16px; }
+    .chart-fill { height: 16px; background: #2563eb; }
+  </style>
+</head>
+<body>
+  <h1>ระบบบันทึกการประเมิน CAUTI และ VAP Bundle</h1>
+  <p class="muted">สำหรับ Stroke Unit</p>
+
+  <div class="card">
+    <h2>บันทึกการประเมิน</h2>
+    <div class="row">
+      <div>
+        <label for="bed">เลือกเตียง</label><br />
+        <select id="bed"><option value="">-- เลือกเตียง --</option></select>
+      </div>
+      <div>
+        <label for="hn">HN</label><br />
+        <input id="hn" placeholder="กรอก HN ด้วยตนเอง" />
+      </div>
+      <div>
+        <label>วันที่บันทึก</label><br />
+        <input id="today" readonly />
+      </div>
+    </div>
+    <form id="checklistForm"></form>
+    <button id="saveBtn" type="button">Save</button>
+    <p id="saveMessage" class="muted"></p>
+  </div>
+
+  <div class="card">
+    <h2>ข้อมูลย้อนหลัง (Stroke Unit)</h2>
+    <div class="row">
+      <div><label>วันที่</label><br /><input type="date" id="filterDate" /></div>
+      <div><label>เตียง</label><br /><input id="filterBed" placeholder="เช่น เตียง 1" /></div>
+      <div><label>HN</label><br /><input id="filterHN" /></div>
+      <div style="align-self:flex-end;">
+        <button type="button" id="searchBtn">ค้นหา</button>
+        <button type="button" id="exportBtn" class="secondary">Export CSV</button>
+      </div>
+    </div>
+    <div style="overflow:auto;">
+      <table id="historyTable">
+        <thead><tr><th>วันที่</th><th>เตียง</th><th>HN</th><th>รายละเอียด</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>สรุปผลการประเมิน (Analytics)</h2>
+    <p class="muted">เลือกช่วงวันที่ เช่น 2/2/69 - 12/2/69 เพื่อดูว่าแต่ละข้อผ่านกี่เปอร์เซ็นต์ และข้อที่มีปัญหามากที่สุด</p>
+    <div class="row">
+      <div><label>ตั้งแต่วันที่</label><br /><input type="date" id="analyticsStart" /></div>
+      <div><label>ถึงวันที่</label><br /><input type="date" id="analyticsEnd" /></div>
+      <div>
+        <label>หมวด</label><br />
+        <select id="analyticsSection">
+          <option value="all">ทั้งหมด (CAUTI + VAP)</option>
+          <option value="cauti">CAUTI</option>
+          <option value="vap">VAP</option>
+        </select>
+      </div>
+      <div style="align-self:flex-end;"><button type="button" id="analyticsBtn">วิเคราะห์</button></div>
+    </div>
+    <p id="analyticsHighlight" class="muted"></p>
+    <div id="analyticsChart"></div>
+  </div>
+
+  <script>
+    const bedSelect = document.getElementById('bed');
+    const hnInput = document.getElementById('hn');
+    const todayInput = document.getElementById('today');
+    const checklistForm = document.getElementById('checklistForm');
+    const saveMessage = document.getElementById('saveMessage');
+
+    let definition = null;
+
+    function todayString() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function createYesNoCheckboxes(key) {
+      const wrap = document.createElement('div');
+      wrap.className = 'choices';
+
+      const yes = document.createElement('input');
+      yes.type = 'checkbox';
+      yes.id = `${key}_yes`;
+
+      const no = document.createElement('input');
+      no.type = 'checkbox';
+      no.id = `${key}_no`;
+
+      yes.addEventListener('change', () => { if (yes.checked) no.checked = false; });
+      no.addEventListener('change', () => { if (no.checked) yes.checked = false; });
+
+      const yesLabel = document.createElement('label');
+      yesLabel.htmlFor = yes.id;
+      yesLabel.textContent = 'ใช่';
+
+      const noLabel = document.createElement('label');
+      noLabel.htmlFor = no.id;
+      noLabel.textContent = 'ไม่ใช่';
+
+      wrap.append(yes, yesLabel, no, noLabel);
+      return wrap;
+    }
+
+    function renderChecklist() {
+      checklistForm.innerHTML = '';
+      ['cauti', 'vap'].forEach((sectionKey) => {
+        const section = definition[sectionKey];
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `<h3>${section.title}</h3><div class="muted">หัวข้อการประเมิน</div>`;
+
+        section.items.forEach((item) => {
+          const div = document.createElement('div');
+          div.className = 'item';
+          const p = document.createElement('div');
+          p.textContent = item.text;
+          div.appendChild(p);
+          div.appendChild(createYesNoCheckboxes(item.key));
+          card.appendChild(div);
+        });
+
+        checklistForm.appendChild(card);
+      });
+    }
+
+    function collectAssessment() {
+      const result = {};
+      for (const sectionKey of ['cauti', 'vap']) {
+        for (const item of definition[sectionKey].items) {
+          const yes = document.getElementById(`${item.key}_yes`).checked;
+          const no = document.getElementById(`${item.key}_no`).checked;
+          if (!yes && !no) return { error: `กรุณาเลือก ใช่/ไม่ใช่ สำหรับ ${item.text}` };
+          result[item.key] = yes;
+        }
+      }
+      return { data: result };
+    }
+
+    function loadBeds() {
+      bedSelect.innerHTML = '<option value="">-- เลือกเตียง --</option>';
+      for (let i = 1; i <= 24; i += 1) {
+        const op = document.createElement('option');
+        op.value = `เตียง ${i}`;
+        op.textContent = `เตียง ${i}`;
+        bedSelect.appendChild(op);
+      }
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      saveMessage.textContent = '';
+      saveMessage.className = 'muted';
+      if (!bedSelect.value || !hnInput.value) {
+        saveMessage.textContent = 'กรุณาเลือกเตียงและกรอก HN ก่อนบันทึก';
+        return;
+      }
+
+      const assessed = collectAssessment();
+      if (assessed.error) {
+        saveMessage.textContent = assessed.error;
+        return;
+      }
+
+      const res = await fetch('/api/checklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bed_no: bedSelect.value,
+          hn: hnInput.value,
+          assessments: assessed.data
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        saveMessage.textContent = err.error || 'บันทึกไม่สำเร็จ';
+        return;
+      }
+
+      saveMessage.textContent = 'บันทึกสำเร็จ และแสดงในประวัติของ Stroke Unit แล้ว';
+      saveMessage.className = 'success';
+      loadHistory();
+      loadAnalytics();
+    });
+
+    async function loadHistory() {
+      const date = document.getElementById('filterDate').value;
+      const bed = document.getElementById('filterBed').value;
+      const hn = document.getElementById('filterHN').value;
+
+      const params = new URLSearchParams();
+      if (date) params.append('date', date);
+      if (bed) params.append('bed', bed);
+      if (hn) params.append('hn', hn);
+
+      const res = await fetch(`/api/records?${params.toString()}`);
+      const data = await res.json();
+      const tbody = document.querySelector('#historyTable tbody');
+      tbody.innerHTML = '';
+
+      data.forEach((row) => {
+        const tr = document.createElement('tr');
+        const yesCount = Object.entries(row).filter(([k, v]) => (k.startsWith('cauti_') || k.startsWith('vap_')) && v === true).length;
+        tr.innerHTML = `<td>${row.assessment_date}</td><td>${row.bed_no}</td><td>${row.hn}</td><td>ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderAnalyticsChart(items) {
+      const chart = document.getElementById('analyticsChart');
+      chart.innerHTML = '';
+      items.forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'chart-row';
+        row.innerHTML = `
+          <div>${item.text}</div>
+          <div class="chart-track"><div class="chart-fill" style="width: ${item.yesPercent}%"></div></div>
+          <div>${item.yesPercent}%</div>
+        `;
+        chart.appendChild(row);
+      });
+    }
+
+    async function loadAnalytics() {
+      const startDate = document.getElementById('analyticsStart').value;
+      const endDate = document.getElementById('analyticsEnd').value;
+      const section = document.getElementById('analyticsSection').value;
+
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (section !== 'all') params.append('section', section);
+
+      const res = await fetch(`/api/analytics?${params.toString()}`);
+      const data = await res.json();
+
+      const highlight = document.getElementById('analyticsHighlight');
+      if (!data.totalRecords) {
+        highlight.textContent = 'ไม่พบข้อมูลในช่วงวันที่ที่เลือก';
+        document.getElementById('analyticsChart').innerHTML = '';
+        return;
+      }
+
+      const worst = data.mostProblematic;
+      highlight.innerHTML = `ช่วงที่เลือกมีทั้งหมด <b>${data.totalRecords}</b> ครั้งประเมิน | ข้อที่มีปัญหามากที่สุดคือ <span class="danger">${worst.text}</span> (ไม่ผ่าน ${worst.noPercent}%)`;
+      renderAnalyticsChart(data.items);
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', loadHistory);
+    document.getElementById('analyticsBtn').addEventListener('click', loadAnalytics);
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const date = document.getElementById('filterDate').value;
+      const bed = document.getElementById('filterBed').value;
+      const hn = document.getElementById('filterHN').value;
+      const params = new URLSearchParams();
+      if (date) params.append('date', date);
+      if (bed) params.append('bed', bed);
+      if (hn) params.append('hn', hn);
+      params.append('format', 'csv');
+      window.open(`/api/records?${params.toString()}`, '_blank');
+    });
+
+    async function init() {
+      todayInput.value = todayString();
+      document.getElementById('analyticsStart').value = todayString().slice(0, 8) + '01';
+      document.getElementById('analyticsEnd').value = todayString();
+
+      const defRes = await fetch('/api/checklist-definition');
+      definition = await defRes.json();
+      renderChecklist();
+      loadBeds();
+      await loadHistory();
+      await loadAnalytics();
+    }
+
+    init();
+  </script>
+</body>
+</html>
