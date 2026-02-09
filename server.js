@@ -242,7 +242,7 @@ app.get('/api/analytics', async (req, res) => {
     return true;
   });
 
-  const selectKeys = [...new Set(['assessment_date', ...keys, ...dropdownSummariesToUse.map((field) => field.key)])];
+  const selectKeys = [...new Set(['assessment_date', 'assessment_scope', ...keys, ...dropdownSummariesToUse.map((field) => field.key)])];
   let query = supabase.from('checklist_records').select(selectKeys.join(','));
 
   if (startDate) query = query.gte('assessment_date', startDate);
@@ -255,20 +255,44 @@ app.get('/api/analytics', async (req, res) => {
     return;
   }
 
+  const normalizeScope = (value) => {
+    if (!value) return 'CAUTI + VAP';
+    if (value === 'both') return 'CAUTI + VAP';
+    if (value === 'cauti') return 'CAUTI เท่านั้น';
+    if (value === 'vap') return 'VAP เท่านั้น';
+    return value;
+  };
+
   const totalRecords = data.length;
+  const cautiCaseCount = data.filter((row) => {
+    const scope = normalizeScope(row.assessment_scope);
+    return scope === 'CAUTI เท่านั้น' || scope === 'CAUTI + VAP';
+  }).length;
+  const vapCaseCount = data.filter((row) => {
+    const scope = normalizeScope(row.assessment_scope);
+    return scope === 'VAP เท่านั้น' || scope === 'CAUTI + VAP';
+  }).length;
+
+  const getDenominatorByKey = (key) => {
+    if (key.startsWith('cauti_')) return cautiCaseCount;
+    if (key.startsWith('vap_')) return vapCaseCount;
+    return totalRecords;
+  };
+
   const items = keys.map((key) => {
-    const answeredCount = data.filter((row) => typeof row[key] === 'boolean').length;
+    const denominator = getDenominatorByKey(key);
     const yesCount = data.filter((row) => row[key] === true).length;
     const noCount = data.filter((row) => row[key] === false).length;
-    const yesPercent = answeredCount > 0 ? Number(((yesCount / answeredCount) * 100).toFixed(2)) : 0;
-    const noPercent = answeredCount > 0 ? Number(((noCount / answeredCount) * 100).toFixed(2)) : 0;
+    const yesPercent = denominator > 0 ? Number(((yesCount / denominator) * 100).toFixed(2)) : 0;
+    const noPercent = denominator > 0 ? Number(((noCount / denominator) * 100).toFixed(2)) : 0;
 
     return {
       key,
       text: itemTextByKey[key],
       yesCount,
       noCount,
-      answeredCount,
+      denominator,
+      answeredCount: denominator,
       totalRecords,
       yesPercent,
       noPercent
@@ -276,11 +300,12 @@ app.get('/api/analytics', async (req, res) => {
   });
 
   const mostProblematic = items.reduce((worst, item) => {
-    if (!worst || item.noCount > worst.noCount) return item;
+    if (!worst || item.noPercent > worst.noPercent) return item;
     return worst;
   }, null);
 
   const dropdownSummaries = dropdownSummariesToUse.map((field) => {
+    const denominator = getDenominatorByKey(field.triggerKey);
     const noCaseRows = data.filter((row) => row[field.triggerKey] === false);
     const totalNoCases = noCaseRows.length;
     const options = field.options.map((option) => {
@@ -289,7 +314,7 @@ app.get('/api/analytics', async (req, res) => {
         value: option,
         count,
         percentOfNoCases: totalNoCases > 0 ? Number(((count / totalNoCases) * 100).toFixed(2)) : 0,
-        percentOfAllCases: totalRecords > 0 ? Number(((count / totalRecords) * 100).toFixed(2)) : 0
+        percentOfAllCases: denominator > 0 ? Number(((count / denominator) * 100).toFixed(2)) : 0
       };
     });
 
@@ -298,7 +323,8 @@ app.get('/api/analytics', async (req, res) => {
       label: field.label,
       triggerKey: field.triggerKey,
       totalNoCases,
-      totalRecords,
+      denominator,
+      totalRecords: denominator,
       options
     };
   });
@@ -308,6 +334,8 @@ app.get('/api/analytics', async (req, res) => {
     endDate: endDate || null,
     section: section || 'all',
     totalRecords,
+    cautiCaseCount,
+    vapCaseCount,
     mostProblematic,
     items,
     dropdownSummaries
