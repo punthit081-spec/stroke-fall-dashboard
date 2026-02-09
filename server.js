@@ -34,7 +34,23 @@ const cauti1NoReasonOptions = [
   '6.ผ่าตัดระบบทางเดินปัสสาวะ',
   '7.มีแผลบริเวณก้นกบและอวัยวะสืบพันธุ์',
   '8.จำกัดการเคลื่อนไหวเป็นเวลานารน',
-  '9.ความสุขสบายของผู้ป่วยในระยะสุดท้าย'
+  '6.ความสุขสบายของผู้ป่วยในระยะสุดท้าย'
+];
+const vap4NoReasonOptions = ['มีข้อห้าม', 'ไม่มีข้อห้าม'];
+
+const dropdownFieldDefinitions = [
+  {
+    key: 'cauti_1_no_reason',
+    triggerKey: 'cauti_1',
+    label: 'เหตุผล CAUTI ข้อ 1 (เมื่อเลือก ไม่ใช่)',
+    options: cauti1NoReasonOptions
+  },
+  {
+    key: 'vap_4_no_reason',
+    triggerKey: 'vap_4',
+    label: 'สาเหตุ VAP ข้อ 4 (เมื่อเลือก ไม่ใช่)',
+    options: vap4NoReasonOptions
+  }
 ];
 
 function ensureSupabase(res) {
@@ -70,7 +86,7 @@ app.get('/api/patients', async (req, res) => {
 app.post('/api/checklist', async (req, res) => {
   if (!ensureSupabase(res)) return;
 
-  const { bed_no, hn, assessments, cauti_1_no_reason } = req.body;
+  const { bed_no, hn, assessments, cauti_1_no_reason, vap_4_no_reason } = req.body;
   if (!bed_no || !hn || !assessments) {
     res.status(400).json({ error: 'bed_no, hn and assessments are required.' });
     return;
@@ -95,6 +111,16 @@ app.post('/api/checklist', async (req, res) => {
     payload.cauti_1_no_reason = cauti_1_no_reason;
   } else {
     payload.cauti_1_no_reason = null;
+  }
+
+  if (assessments.vap_4 === false) {
+    if (!vap_4_no_reason || !vap4NoReasonOptions.includes(vap_4_no_reason)) {
+      res.status(400).json({ error: 'vap_4_no_reason is required when vap_4 is ไม่ใช่.' });
+      return;
+    }
+    payload.vap_4_no_reason = vap_4_no_reason;
+  } else {
+    payload.vap_4_no_reason = null;
   }
 
   const { data, error } = await supabase.from('checklist_records').insert(payload).select().single();
@@ -132,7 +158,7 @@ app.get('/api/records', async (req, res) => {
   }
 
   if (format === 'csv') {
-    const headers = ['assessment_date', 'bed_no', 'hn', 'cauti_1_no_reason', ...checklistKeys];
+    const headers = ['assessment_date', 'bed_no', 'hn', 'cauti_1_no_reason', 'vap_4_no_reason', ...checklistKeys];
     const rows = data.map((row) => headers.map((h) => row[h]));
     const csv = [headers.join(','), ...rows.map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
 
@@ -184,7 +210,14 @@ app.get('/api/analytics', async (req, res) => {
   if (section === 'cauti') keys = checklistDefinition.cauti.items.map((item) => item.key);
   if (section === 'vap') keys = checklistDefinition.vap.items.map((item) => item.key);
 
-  let query = supabase.from('checklist_records').select(['assessment_date', ...keys].join(','));
+  const dropdownSummariesToUse = dropdownFieldDefinitions.filter((field) => {
+    if (section === 'cauti') return field.triggerKey.startsWith('cauti_');
+    if (section === 'vap') return field.triggerKey.startsWith('vap_');
+    return true;
+  });
+
+  const selectKeys = [...new Set(['assessment_date', ...keys, ...dropdownSummariesToUse.map((field) => field.key)])];
+  let query = supabase.from('checklist_records').select(selectKeys.join(','));
 
   if (startDate) query = query.gte('assessment_date', startDate);
   if (endDate) query = query.lte('assessment_date', endDate);
@@ -219,13 +252,37 @@ app.get('/api/analytics', async (req, res) => {
     return worst;
   }, null);
 
+  const dropdownSummaries = dropdownSummariesToUse.map((field) => {
+    const noCaseRows = data.filter((row) => row[field.triggerKey] === false);
+    const totalNoCases = noCaseRows.length;
+    const options = field.options.map((option) => {
+      const count = noCaseRows.filter((row) => row[field.key] === option).length;
+      return {
+        value: option,
+        count,
+        percentOfNoCases: totalNoCases > 0 ? Number(((count / totalNoCases) * 100).toFixed(2)) : 0,
+        percentOfAllCases: totalRecords > 0 ? Number(((count / totalRecords) * 100).toFixed(2)) : 0
+      };
+    });
+
+    return {
+      key: field.key,
+      label: field.label,
+      triggerKey: field.triggerKey,
+      totalNoCases,
+      totalRecords,
+      options
+    };
+  });
+
   res.json({
     startDate: startDate || null,
     endDate: endDate || null,
     section: section || 'all',
     totalRecords,
     mostProblematic,
-    items
+    items,
+    dropdownSummaries
   });
 });
 

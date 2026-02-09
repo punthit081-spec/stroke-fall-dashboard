@@ -25,6 +25,12 @@
     .chart-track { width: 100%; background: #e5e7eb; border-radius: 999px; overflow: hidden; height: 16px; }
     .chart-fill { height: 16px; background: #2563eb; }
     .reason-select { margin-top: 8px; min-width: 420px; max-width: 100%; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .stat-card { background: #f3f4f6; border-radius: 10px; padding: 10px 12px; }
+    .stat-title { font-size: 12px; color: #6b7280; }
+    .stat-value { font-size: 22px; font-weight: 700; }
+    .dropdown-summary { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    .dropdown-summary ul { margin: 6px 0 0; padding-left: 18px; }
   </style>
 </head>
 <body>
@@ -87,8 +93,10 @@
       </div>
       <div style="align-self:flex-end;"><button type="button" id="analyticsBtn">วิเคราะห์</button></div>
     </div>
+    <div id="analyticsOverview" class="stats-grid"></div>
     <p id="analyticsHighlight" class="muted"></p>
     <div id="analyticsChart"></div>
+    <div id="analyticsDropdownSummary"></div>
   </div>
 
   <script>
@@ -108,8 +116,9 @@
       '6.ผ่าตัดระบบทางเดินปัสสาวะ',
       '7.มีแผลบริเวณก้นกบและอวัยวะสืบพันธุ์',
       '8.จำกัดการเคลื่อนไหวเป็นเวลานารน',
-      '6.ความสุขสบายของผู้ป่วยในระยะสุดท้าย'
+      '9.ความสุขสบายของผู้ป่วยในระยะสุดท้าย'
     ];
+    const vap4NoReasonOptions = ['มีข้อห้าม', 'ไม่มีข้อห้าม'];
 
     function todayString() {
       return new Date().toISOString().slice(0, 10);
@@ -154,18 +163,18 @@
       return wrap;
     }
 
-    function createCauti1ReasonSelect() {
+    function createReasonSelect(id, placeholder, options) {
       const select = document.createElement('select');
-      select.id = 'cauti_1_no_reason';
+      select.id = id;
       select.className = 'reason-select';
       select.style.display = 'none';
 
       const defaultOption = document.createElement('option');
       defaultOption.value = '';
-      defaultOption.textContent = '-- เลือกเหตุผลเมื่อเลือก ไม่ใช่ --';
+      defaultOption.textContent = placeholder;
       select.appendChild(defaultOption);
 
-      cauti1NoReasonOptions.forEach((reason) => {
+      options.forEach((reason) => {
         const option = document.createElement('option');
         option.value = reason;
         option.textContent = reason;
@@ -191,7 +200,11 @@
           div.appendChild(p);
 
           if (item.key === 'cauti_1') {
-            const reasonSelect = createCauti1ReasonSelect();
+            const reasonSelect = createReasonSelect('cauti_1_no_reason', '-- เลือกเหตุผลเมื่อเลือก ไม่ใช่ --', cauti1NoReasonOptions);
+            div.appendChild(createYesNoCheckboxes(item.key, reasonSelect));
+            div.appendChild(reasonSelect);
+          } else if (item.key === 'vap_4') {
+            const reasonSelect = createReasonSelect('vap_4_no_reason', '-- เลือกสถานะข้อห้ามเมื่อเลือก ไม่ใช่ --', vap4NoReasonOptions);
             div.appendChild(createYesNoCheckboxes(item.key, reasonSelect));
             div.appendChild(reasonSelect);
           } else {
@@ -208,6 +221,7 @@
     function collectAssessment() {
       const result = {};
       let cauti1NoReason = null;
+      let vap4NoReason = null;
       for (const sectionKey of ['cauti', 'vap']) {
         for (const item of definition[sectionKey].items) {
           const yes = document.getElementById(`${item.key}_yes`).checked;
@@ -222,9 +236,17 @@
             }
             cauti1NoReason = reasonSelect.value;
           }
+
+          if (item.key === 'vap_4' && no) {
+            const reasonSelect = document.getElementById('vap_4_no_reason');
+            if (!reasonSelect.value) {
+              return { error: 'กรุณาเลือกข้อห้ามสำหรับข้อ 4 เมื่อเลือก ไม่ใช่' };
+            }
+            vap4NoReason = reasonSelect.value;
+          }
         }
       }
-      return { data: result, cauti1NoReason };
+      return { data: result, cauti1NoReason, vap4NoReason };
     }
 
     function loadBeds() {
@@ -258,7 +280,8 @@
           bed_no: bedSelect.value,
           hn: hnInput.value,
           assessments: assessed.data,
-          cauti_1_no_reason: assessed.cauti1NoReason
+          cauti_1_no_reason: assessed.cauti1NoReason,
+          vap_4_no_reason: assessed.vap4NoReason
         })
       });
 
@@ -310,7 +333,7 @@
           <td>${row.assessment_date}</td>
           <td>${row.bed_no}</td>
           <td>${row.hn}</td>
-          <td>ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ${row.cauti_1 === false && row.cauti_1_no_reason ? `<br /><span class="muted">เหตุผลข้อ 1: ${row.cauti_1_no_reason}</span>` : ''}</td>
+          <td>ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ${row.cauti_1 === false && row.cauti_1_no_reason ? `<br /><span class="muted">เหตุผลข้อ 1: ${row.cauti_1_no_reason}</span>` : ''}${row.vap_4 === false && row.vap_4_no_reason ? `<br /><span class="muted">ข้อ 4 ท่านอนศีรษะสูง: ${row.vap_4_no_reason}</span>` : ''}</td>
           <td><button type="button" class="danger-btn" data-id="${row.id}">ลบ</button></td>
         `;
         tbody.appendChild(tr);
@@ -330,9 +353,41 @@
         row.innerHTML = `
           <div>${item.text}</div>
           <div class="chart-track"><div class="chart-fill" style="width: ${item.yesPercent}%"></div></div>
-          <div>${item.yesPercent}%</div>
+          <div>${item.yesCount}/${item.totalRecords} (${item.yesPercent}%)</div>
         `;
         chart.appendChild(row);
+      });
+    }
+
+    function renderAnalyticsOverview(data) {
+      const overview = document.getElementById('analyticsOverview');
+      overview.innerHTML = `
+        <div class="stat-card"><div class="stat-title">จำนวนเคสทั้งหมด</div><div class="stat-value">${data.totalRecords}</div></div>
+        <div class="stat-card"><div class="stat-title">ข้อที่ไม่ผ่านสูงสุด</div><div class="stat-value">${data.mostProblematic ? data.mostProblematic.noCount : 0}</div><div class="muted">จาก ${data.totalRecords} เคส (${data.mostProblematic ? data.mostProblematic.noPercent : 0}%)</div></div>
+      `;
+    }
+
+    function renderDropdownSummaries(dropdownSummaries) {
+      const wrapper = document.getElementById('analyticsDropdownSummary');
+      wrapper.innerHTML = '';
+
+      dropdownSummaries.forEach((summary) => {
+        const box = document.createElement('div');
+        box.className = 'dropdown-summary';
+
+        const title = document.createElement('div');
+        title.innerHTML = `<b>${summary.label}</b> <span class="muted">(พบกรณีตอบ ไม่ใช่ ${summary.totalNoCases}/${summary.totalRecords} เคส)</span>`;
+
+        const list = document.createElement('ul');
+        summary.options.forEach((option) => {
+          const li = document.createElement('li');
+          li.textContent = `${option.value}: ${option.count}/${summary.totalRecords} เคส (${option.percentOfAllCases}%)`;
+          list.appendChild(li);
+        });
+
+        box.appendChild(title);
+        box.appendChild(list);
+        wrapper.appendChild(box);
       });
     }
 
@@ -353,12 +408,16 @@
       if (!data.totalRecords) {
         highlight.textContent = 'ไม่พบข้อมูลในช่วงวันที่ที่เลือก';
         document.getElementById('analyticsChart').innerHTML = '';
+        document.getElementById('analyticsOverview').innerHTML = '';
+        document.getElementById('analyticsDropdownSummary').innerHTML = '';
         return;
       }
 
       const worst = data.mostProblematic;
-      highlight.innerHTML = `ช่วงที่เลือกมีทั้งหมด <b>${data.totalRecords}</b> ครั้งประเมิน | ข้อที่มีปัญหามากที่สุดคือ <span class="danger">${worst.text}</span> (ไม่ผ่าน ${worst.noPercent}%)`;
+      highlight.innerHTML = `ช่วงที่เลือกมีทั้งหมด <b>${data.totalRecords}</b> ครั้งประเมิน | ข้อที่มีปัญหามากที่สุดคือ <span class="danger">${worst.text}</span> ไม่ผ่าน <b>${worst.noCount}</b> เคส (${worst.noPercent}%)`;
+      renderAnalyticsOverview(data);
       renderAnalyticsChart(data.items);
+      renderDropdownSummaries(data.dropdownSummaries || []);
     }
 
     document.getElementById('searchBtn').addEventListener('click', loadHistory);

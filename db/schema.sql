@@ -14,6 +14,7 @@ create table if not exists public.checklist_records (
   bed_no text not null,
   hn text not null,
   cauti_1_no_reason text,
+  vap_4_no_reason text,
   cauti_1 boolean not null,
   cauti_2 boolean not null,
   cauti_3 boolean not null,
@@ -35,6 +36,7 @@ create table if not exists public.checklist_records (
 );
 
 alter table public.checklist_records add column if not exists cauti_1_no_reason text;
+alter table public.checklist_records add column if not exists vap_4_no_reason text;
 alter table public.checklist_records add column if not exists cauti_7 boolean not null default false;
 alter table public.checklist_records add column if not exists cauti_8 boolean not null default false;
 alter table public.checklist_records add column if not exists vap_7 boolean not null default false;
