@@ -44,7 +44,7 @@ app.get('/api/checklist-definition', (_, res) => {
 app.get('/api/patients', async (req, res) => {
   if (!ensureSupabase(res)) return;
 
-  let query = supabase.from('patients').select('bed_no, hn, patient_name').order('bed_no', { ascending: true });
+  let query = supabase.from('patients').select('bed_no, hn, patient_name').order('id', { ascending: true });
 
   if (req.query.bed) {
     query = query.eq('bed_no', req.query.bed);
