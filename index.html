@@ -6,58 +6,99 @@
 
 <style>
 body {
-    margin:0;
-    background:black;
-    font-family:Arial, sans-serif;
-    color:white;
+    margin: 0;
+    background: black;
+    font-family: Arial, sans-serif;
+    color: white;
 }
 
 h1 {
-    text-align:center;
-    padding:20px;
-    font-size:40px;
+    text-align: center;
+    padding: 20px;
+    font-size: 40px;
+    margin: 0;
 }
 
-.header, .row {
-    display:grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
-    padding:15px;
-    align-items:center;
+.title-bar {
+    position: relative;
+}
+
+.current-count {
+    position: absolute;
+    top: 24px;
+    right: 28px;
+    font-size: 22px;
+    background: #1f1f1f;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #6fd3ff;
+}
+
+.header,
+.row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.2fr 1.3fr 1fr;
+    padding: 15px;
+    align-items: center;
 }
 
 .header {
-    background:#222;
-    font-size:22px;
-    font-weight:bold;
+    background: #222;
+    font-size: 22px;
+    font-weight: bold;
 }
 
 .row {
-    border-bottom:1px solid #333;
-    font-size:20px;
+    border-bottom: 1px solid #333;
+    font-size: 20px;
 }
 
-.row:nth-child(even){
-    background:#111;
+.row:nth-child(even) {
+    background: #111;
 }
 
-.low { color:lime; }
-.moderate { color:orange; }
-.high { color:red; }
+.mental-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 17px;
+}
+
+.mental-toggle input {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.score-note {
+    font-size: 14px;
+    color: #9ec0ff;
+    margin-top: 4px;
+}
+
+.low { color: lime; }
+.moderate { color: orange; }
+.high { color: red; }
 
 .dot {
-    font-size:22px;
+    font-size: 22px;
 }
 </style>
 </head>
 
 <body>
 
-<h1>Stroke Unit Fall Monitor</h1>
+<div class="title-bar">
+    <h1>Stroke Unit Fall Monitor</h1>
+    <div id="currentCount" class="current-count">จำนวนคนปัจจุบัน: 0</div>
+</div>
 
 <div class="header">
     <div>ชื่อ</div>
     <div>เตียง</div>
     <div>Fall Score</div>
+    <div>สับสนวุ่นวาย (+15)</div>
     <div>Risk</div>
 </div>
 
@@ -65,37 +106,107 @@ h1 {
 
 <script>
 const sheetURL = "https://opensheet.elk.sh/1dc_L7he2jDu64q8OBGbCEnf2gcrJ16nn7-NiwvbOXW4/dashboard";
+const MENTAL_SCORE_BONUS = 15;
+const CONFUSION_STORAGE_KEY = "fallMonitorConfusionByPatient";
 
-function loadData(){
-    fetch(sheetURL)
-    .then(res => res.json())
-    .then(data => {
+let latestRows = [];
+const confusionMap = loadConfusionMap();
 
-        const table = document.getElementById("data");
-        table.innerHTML = "";
-
-        data.forEach(row => {
-
-            if(!row.Name) return;
-
-            let riskClass = "low";
-            if(row.Risk === "Moderate") riskClass = "moderate";
-            if(row.Risk === "High") riskClass = "high";
-
-            table.innerHTML += `
-                <div class="row">
-                    <div>${row.Name}</div>
-                    <div>${row.Bed}</div>
-                    <div>${row.FallTotal}</div>
-                    <div class="${riskClass}">
-                        <span class="dot">●</span> ${row.Risk}
-                    </div>
-                </div>
-            `;
-        });
-
-    });
+function loadConfusionMap() {
+    try {
+        const raw = localStorage.getItem(CONFUSION_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (error) {
+        return {};
+    }
 }
+
+function saveConfusionMap() {
+    localStorage.setItem(CONFUSION_STORAGE_KEY, JSON.stringify(confusionMap));
+}
+
+function getPatientKey(row) {
+    return `${row.Bed || "-"}|${row.Name || "-"}`;
+}
+
+function parseScore(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getRiskFromScore(score, fallbackRisk) {
+    if (Number.isFinite(score)) {
+        if (score >= 45) return { label: "High", className: "high" };
+        if (score >= 25) return { label: "Moderate", className: "moderate" };
+        return { label: "Low", className: "low" };
+    }
+
+    const fallback = (fallbackRisk || "Low").toLowerCase();
+    if (fallback === "high") return { label: "High", className: "high" };
+    if (fallback === "moderate") return { label: "Moderate", className: "moderate" };
+    return { label: "Low", className: "low" };
+}
+
+function renderRows(data) {
+    const table = document.getElementById("data");
+    const countDisplay = document.getElementById("currentCount");
+
+    table.innerHTML = "";
+    let currentCount = 0;
+
+    data.forEach((row) => {
+        if (!row.Name) return;
+
+        currentCount += 1;
+        const patientKey = getPatientKey(row);
+        const confused = Boolean(confusionMap[patientKey]);
+
+        const baseScore = parseScore(row.FallTotal);
+        const adjustedScore = baseScore + (confused ? MENTAL_SCORE_BONUS : 0);
+        const risk = getRiskFromScore(adjustedScore, row.Risk);
+
+        table.innerHTML += `
+            <div class="row">
+                <div>${row.Name}</div>
+                <div>${row.Bed}</div>
+                <div>
+                    <div>${adjustedScore}</div>
+                    <div class="score-note">base ${baseScore}${confused ? ` + ${MENTAL_SCORE_BONUS}` : ""}</div>
+                </div>
+                <label class="mental-toggle">
+                    <input type="checkbox" data-patient-key="${patientKey}" ${confused ? "checked" : ""}>
+                    <span>${confused ? "มี" : "ไม่มี"}</span>
+                </label>
+                <div class="${risk.className}">
+                    <span class="dot">●</span> ${risk.label}
+                </div>
+            </div>
+        `;
+    });
+
+    countDisplay.textContent = `จำนวนคนปัจจุบัน: ${currentCount}`;
+}
+
+function loadData() {
+    fetch(sheetURL)
+        .then((res) => res.json())
+        .then((data) => {
+            latestRows = data;
+            renderRows(data);
+        });
+}
+
+document.getElementById("data").addEventListener("change", (event) => {
+    const checkbox = event.target;
+    if (!(checkbox instanceof HTMLInputElement) || checkbox.type !== "checkbox") return;
+
+    const patientKey = checkbox.dataset.patientKey;
+    if (!patientKey) return;
+
+    confusionMap[patientKey] = checkbox.checked;
+    saveConfusionMap();
+    renderRows(latestRows);
+});
 
 loadData();
 setInterval(loadData, 5000); // refresh ทุก 5 วิ
@@ -103,4 +214,3 @@ setInterval(loadData, 5000); // refresh ทุก 5 วิ
 
 </body>
 </html>
-
