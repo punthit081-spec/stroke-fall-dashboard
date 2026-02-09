@@ -12,7 +12,9 @@ const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Keep original Stroke Fall Monitor root index.html untouched.
+app.use('/cauti-vap', express.static(path.join(__dirname, 'public')));
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
@@ -125,8 +127,20 @@ app.get('/api/records', async (req, res) => {
   res.json(data);
 });
 
-app.get('*', (_, res) => {
+app.get('/cauti-vap', (_, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/cauti-vap/*', (_, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/', (_, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('*', (_, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
 app.listen(port, () => {
