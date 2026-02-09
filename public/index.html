@@ -13,6 +13,7 @@
     select,input,button { padding: 8px 10px; border-radius: 8px; border: 1px solid #cfd6e3; }
     button { background: #2563eb; color: #fff; border: none; cursor: pointer; }
     button.secondary { background: #4b5563; }
+    button.danger-btn { background: #dc2626; }
     .item { border-top: 1px solid #e5e7eb; padding: 10px 0; }
     .choices { display: flex; gap: 16px; margin-top: 6px; }
     table { width: 100%; border-collapse: collapse; }
@@ -63,7 +64,7 @@
     </div>
     <div style="overflow:auto;">
       <table id="historyTable">
-        <thead><tr><th>วันที่</th><th>เตียง</th><th>HN</th><th>รายละเอียด</th></tr></thead>
+        <thead><tr><th>วันที่</th><th>เตียง</th><th>HN</th><th>รายละเอียด</th><th>จัดการ</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -210,6 +211,20 @@
       loadAnalytics();
     });
 
+    async function deleteRecord(recordId) {
+      if (!confirm('ยืนยันการลบประวัติรายการนี้?')) return;
+
+      const res = await fetch(`/api/records/${recordId}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(payload.error || 'ลบข้อมูลไม่สำเร็จ');
+        return;
+      }
+
+      await loadHistory();
+      await loadAnalytics();
+    }
+
     async function loadHistory() {
       const date = document.getElementById('filterDate').value;
       const bed = document.getElementById('filterBed').value;
@@ -228,8 +243,18 @@
       data.forEach((row) => {
         const tr = document.createElement('tr');
         const yesCount = Object.entries(row).filter(([k, v]) => (k.startsWith('cauti_') || k.startsWith('vap_')) && v === true).length;
-        tr.innerHTML = `<td>${row.assessment_date}</td><td>${row.bed_no}</td><td>${row.hn}</td><td>ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ</td>`;
+        tr.innerHTML = `
+          <td>${row.assessment_date}</td>
+          <td>${row.bed_no}</td>
+          <td>${row.hn}</td>
+          <td>ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ</td>
+          <td><button type="button" class="danger-btn" data-id="${row.id}">ลบ</button></td>
+        `;
         tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll('button[data-id]').forEach((button) => {
+        button.addEventListener('click', () => deleteRecord(button.dataset.id));
       });
     }
 

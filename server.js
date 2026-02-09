@@ -124,6 +124,36 @@ app.get('/api/records', async (req, res) => {
   res.json(data);
 });
 
+
+app.delete('/api/records/:id', async (req, res) => {
+  if (!ensureSupabase(res)) return;
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid record id.' });
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('checklist_records')
+    .delete()
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  if (!data) {
+    res.status(404).json({ error: 'Record not found.' });
+    return;
+  }
+
+  res.json({ success: true, id });
+});
+
 app.get('/api/analytics', async (req, res) => {
   if (!ensureSupabase(res)) return;
 
