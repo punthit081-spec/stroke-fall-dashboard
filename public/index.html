@@ -24,6 +24,7 @@
     .chart-row { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr 80px; gap: 10px; align-items: center; margin-bottom: 8px; }
     .chart-track { width: 100%; background: #e5e7eb; border-radius: 999px; overflow: hidden; height: 16px; }
     .chart-fill { height: 16px; background: #2563eb; }
+    .reason-select { margin-top: 8px; min-width: 420px; max-width: 100%; }
   </style>
 </head>
 <body>
@@ -98,12 +99,23 @@
     const saveMessage = document.getElementById('saveMessage');
 
     let definition = null;
+    const cauti1NoReasonOptions = [
+      '1.มีการอุดตันของระบบทางเดินปัสสาวะ',
+      '2.ต้องการตัวเลขที่ถูกต้องของจำนวนปัสสาวะ',
+      '3.ระยะเวลานาน',
+      '4.ความถูกต้องของ I/O',
+      '5.ผ่าตัดบริเวณก้นกบ',
+      '6.ผ่าตัดระบบทางเดินปัสสาวะ',
+      '7.มีแผลบริเวณก้นกบและอวัยวะสืบพันธุ์',
+      '8.จำกัดการเคลื่อนไหวเป็นเวลานารน',
+      '6.ความสุขสบายของผู้ป่วยในระยะสุดท้าย'
+    ];
 
     function todayString() {
       return new Date().toISOString().slice(0, 10);
     }
 
-    function createYesNoCheckboxes(key) {
+    function createYesNoCheckboxes(key, reasonSelect = null) {
       const wrap = document.createElement('div');
       wrap.className = 'choices';
 
@@ -115,8 +127,20 @@
       no.type = 'checkbox';
       no.id = `${key}_no`;
 
-      yes.addEventListener('change', () => { if (yes.checked) no.checked = false; });
-      no.addEventListener('change', () => { if (no.checked) yes.checked = false; });
+      yes.addEventListener('change', () => {
+        if (yes.checked) no.checked = false;
+        if (yes.checked && reasonSelect) {
+          reasonSelect.value = '';
+          reasonSelect.style.display = 'none';
+        }
+      });
+      no.addEventListener('change', () => {
+        if (no.checked) yes.checked = false;
+        if (reasonSelect) {
+          reasonSelect.style.display = no.checked ? 'inline-block' : 'none';
+          if (!no.checked) reasonSelect.value = '';
+        }
+      });
 
       const yesLabel = document.createElement('label');
       yesLabel.htmlFor = yes.id;
@@ -128,6 +152,27 @@
 
       wrap.append(yes, yesLabel, no, noLabel);
       return wrap;
+    }
+
+    function createCauti1ReasonSelect() {
+      const select = document.createElement('select');
+      select.id = 'cauti_1_no_reason';
+      select.className = 'reason-select';
+      select.style.display = 'none';
+
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = '-- เลือกเหตุผลเมื่อเลือก ไม่ใช่ --';
+      select.appendChild(defaultOption);
+
+      cauti1NoReasonOptions.forEach((reason) => {
+        const option = document.createElement('option');
+        option.value = reason;
+        option.textContent = reason;
+        select.appendChild(option);
+      });
+
+      return select;
     }
 
     function renderChecklist() {
@@ -144,7 +189,15 @@
           const p = document.createElement('div');
           p.textContent = item.text;
           div.appendChild(p);
-          div.appendChild(createYesNoCheckboxes(item.key));
+
+          if (item.key === 'cauti_1') {
+            const reasonSelect = createCauti1ReasonSelect();
+            div.appendChild(createYesNoCheckboxes(item.key, reasonSelect));
+            div.appendChild(reasonSelect);
+          } else {
+            div.appendChild(createYesNoCheckboxes(item.key));
+          }
+
           card.appendChild(div);
         });
 
@@ -154,15 +207,24 @@
 
     function collectAssessment() {
       const result = {};
+      let cauti1NoReason = null;
       for (const sectionKey of ['cauti', 'vap']) {
         for (const item of definition[sectionKey].items) {
           const yes = document.getElementById(`${item.key}_yes`).checked;
           const no = document.getElementById(`${item.key}_no`).checked;
           if (!yes && !no) return { error: `กรุณาเลือก ใช่/ไม่ใช่ สำหรับ ${item.text}` };
           result[item.key] = yes;
+
+          if (item.key === 'cauti_1' && no) {
+            const reasonSelect = document.getElementById('cauti_1_no_reason');
+            if (!reasonSelect.value) {
+              return { error: 'กรุณาเลือกเหตุผลสำหรับข้อ 1 เมื่อเลือก ไม่ใช่' };
+            }
+            cauti1NoReason = reasonSelect.value;
+          }
         }
       }
-      return { data: result };
+      return { data: result, cauti1NoReason };
     }
 
     function loadBeds() {
@@ -195,7 +257,8 @@
         body: JSON.stringify({
           bed_no: bedSelect.value,
           hn: hnInput.value,
-          assessments: assessed.data
+          assessments: assessed.data,
+          cauti_1_no_reason: assessed.cauti1NoReason
         })
       });
 
@@ -247,7 +310,7 @@
           <td>${row.assessment_date}</td>
           <td>${row.bed_no}</td>
           <td>${row.hn}</td>
-          <td>ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ</td>
+          <td>ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ${row.cauti_1 === false && row.cauti_1_no_reason ? `<br /><span class="muted">เหตุผลข้อ 1: ${row.cauti_1_no_reason}</span>` : ''}</td>
           <td><button type="button" class="danger-btn" data-id="${row.id}">ลบ</button></td>
         `;
         tbody.appendChild(tr);

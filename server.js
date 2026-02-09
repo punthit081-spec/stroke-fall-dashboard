@@ -25,6 +25,17 @@ if (supabaseUrl && supabaseKey) {
 const checklistItems = [...checklistDefinition.cauti.items, ...checklistDefinition.vap.items];
 const checklistKeys = checklistItems.map((item) => item.key);
 const itemTextByKey = Object.fromEntries(checklistItems.map((item) => [item.key, item.text]));
+const cauti1NoReasonOptions = [
+  '1.มีการอุดตันของระบบทางเดินปัสสาวะ',
+  '2.ต้องการตัวเลขที่ถูกต้องของจำนวนปัสสาวะ',
+  '3.ระยะเวลานาน',
+  '4.ความถูกต้องของ I/O',
+  '5.ผ่าตัดบริเวณก้นกบ',
+  '6.ผ่าตัดระบบทางเดินปัสสาวะ',
+  '7.มีแผลบริเวณก้นกบและอวัยวะสืบพันธุ์',
+  '8.จำกัดการเคลื่อนไหวเป็นเวลานารน',
+  '9.ความสุขสบายของผู้ป่วยในระยะสุดท้าย'
+];
 
 function ensureSupabase(res) {
   if (!supabase) {
@@ -59,7 +70,7 @@ app.get('/api/patients', async (req, res) => {
 app.post('/api/checklist', async (req, res) => {
   if (!ensureSupabase(res)) return;
 
-  const { bed_no, hn, assessments } = req.body;
+  const { bed_no, hn, assessments, cauti_1_no_reason } = req.body;
   if (!bed_no || !hn || !assessments) {
     res.status(400).json({ error: 'bed_no, hn and assessments are required.' });
     return;
@@ -74,6 +85,16 @@ app.post('/api/checklist', async (req, res) => {
       return;
     }
     payload[key] = assessments[key];
+  }
+
+  if (assessments.cauti_1 === false) {
+    if (!cauti_1_no_reason || !cauti1NoReasonOptions.includes(cauti_1_no_reason)) {
+      res.status(400).json({ error: 'cauti_1_no_reason is required when cauti_1 is ไม่ใช่.' });
+      return;
+    }
+    payload.cauti_1_no_reason = cauti_1_no_reason;
+  } else {
+    payload.cauti_1_no_reason = null;
   }
 
   const { data, error } = await supabase.from('checklist_records').insert(payload).select().single();
@@ -111,7 +132,7 @@ app.get('/api/records', async (req, res) => {
   }
 
   if (format === 'csv') {
-    const headers = ['assessment_date', 'bed_no', 'hn', ...checklistKeys];
+    const headers = ['assessment_date', 'bed_no', 'hn', 'cauti_1_no_reason', ...checklistKeys];
     const rows = data.map((row) => headers.map((h) => row[h]));
     const csv = [headers.join(','), ...rows.map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
 
