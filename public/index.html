@@ -21,7 +21,7 @@
     .muted { color: #6b7280; font-size: 13px; }
     .success { color: #059669; }
     .danger { color: #dc2626; font-weight: 700; }
-    .chart-row { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr 80px; gap: 10px; align-items: center; margin-bottom: 8px; }
+    .chart-row { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr 160px; gap: 10px; align-items: center; margin-bottom: 8px; }
     .chart-track { width: 100%; background: #e5e7eb; border-radius: 999px; overflow: hidden; height: 16px; }
     .chart-fill { height: 16px; background: #2563eb; }
     .reason-select { margin-top: 8px; min-width: 420px; max-width: 100%; }
@@ -40,6 +40,14 @@
   <div class="card">
     <h2>บันทึกการประเมิน</h2>
     <div class="row">
+      <div>
+        <label for="assessmentScope">เลือกแบบประเมิน</label><br />
+        <select id="assessmentScope">
+          <option value="both">CAUTI + VAP</option>
+          <option value="cauti">CAUTI เท่านั้น</option>
+          <option value="vap">VAP เท่านั้น</option>
+        </select>
+      </div>
       <div>
         <label for="bed">เลือกเตียง</label><br />
         <select id="bed"><option value="">-- เลือกเตียง --</option></select>
@@ -79,7 +87,7 @@
 
   <div class="card">
     <h2>สรุปผลการประเมิน (Analytics)</h2>
-    <p class="muted">เลือกช่วงวันที่ เช่น 2/2/69 - 12/2/69 เพื่อดูว่าแต่ละข้อผ่านกี่เปอร์เซ็นต์ และข้อที่มีปัญหามากที่สุด</p>
+    <p class="muted">เลือกช่วงวันที่ เช่น 2/2/69 - 12/2/69 เพื่อดู % และจำนวนเคสจริง</p>
     <div class="row">
       <div><label>ตั้งแต่วันที่</label><br /><input type="date" id="analyticsStart" /></div>
       <div><label>ถึงวันที่</label><br /><input type="date" id="analyticsEnd" /></div>
@@ -105,6 +113,7 @@
     const todayInput = document.getElementById('today');
     const checklistForm = document.getElementById('checklistForm');
     const saveMessage = document.getElementById('saveMessage');
+    const assessmentScopeSelect = document.getElementById('assessmentScope');
 
     let definition = null;
     const cauti1NoReasonOptions = [
@@ -116,12 +125,19 @@
       '6.ผ่าตัดระบบทางเดินปัสสาวะ',
       '7.มีแผลบริเวณก้นกบและอวัยวะสืบพันธุ์',
       '8.จำกัดการเคลื่อนไหวเป็นเวลานารน',
-      '9.ความสุขสบายของผู้ป่วยในระยะสุดท้าย'
+      '6.ความสุขสบายของผู้ป่วยในระยะสุดท้าย'
     ];
     const vap4NoReasonOptions = ['มีข้อห้าม', 'ไม่มีข้อห้าม'];
 
     function todayString() {
       return new Date().toISOString().slice(0, 10);
+    }
+
+    function getActiveSections() {
+      const scope = assessmentScopeSelect.value;
+      if (scope === 'cauti') return ['cauti'];
+      if (scope === 'vap') return ['vap'];
+      return ['cauti', 'vap'];
     }
 
     function createYesNoCheckboxes(key, reasonSelect = null) {
@@ -186,7 +202,9 @@
 
     function renderChecklist() {
       checklistForm.innerHTML = '';
-      ['cauti', 'vap'].forEach((sectionKey) => {
+      const sections = getActiveSections();
+
+      sections.forEach((sectionKey) => {
         const section = definition[sectionKey];
         const card = document.createElement('div');
         card.className = 'card';
@@ -222,7 +240,9 @@
       const result = {};
       let cauti1NoReason = null;
       let vap4NoReason = null;
-      for (const sectionKey of ['cauti', 'vap']) {
+      const sections = getActiveSections();
+
+      for (const sectionKey of sections) {
         for (const item of definition[sectionKey].items) {
           const yes = document.getElementById(`${item.key}_yes`).checked;
           const no = document.getElementById(`${item.key}_no`).checked;
@@ -246,6 +266,7 @@
           }
         }
       }
+
       return { data: result, cauti1NoReason, vap4NoReason };
     }
 
@@ -258,6 +279,8 @@
         bedSelect.appendChild(op);
       }
     }
+
+    assessmentScopeSelect.addEventListener('change', renderChecklist);
 
     document.getElementById('saveBtn').addEventListener('click', async () => {
       saveMessage.textContent = '';
@@ -279,6 +302,7 @@
         body: JSON.stringify({
           bed_no: bedSelect.value,
           hn: hnInput.value,
+          assessment_scope: assessmentScopeSelect.value,
           assessments: assessed.data,
           cauti_1_no_reason: assessed.cauti1NoReason,
           vap_4_no_reason: assessed.vap4NoReason
@@ -333,7 +357,12 @@
           <td>${row.assessment_date}</td>
           <td>${row.bed_no}</td>
           <td>${row.hn}</td>
-          <td>ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ${row.cauti_1 === false && row.cauti_1_no_reason ? `<br /><span class="muted">เหตุผลข้อ 1: ${row.cauti_1_no_reason}</span>` : ''}${row.vap_4 === false && row.vap_4_no_reason ? `<br /><span class="muted">ข้อ 4 ท่านอนศีรษะสูง: ${row.vap_4_no_reason}</span>` : ''}</td>
+          <td>
+            ประเภท: ${row.assessment_scope || 'both'}<br />
+            ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ
+            ${row.cauti_1 === false && row.cauti_1_no_reason ? `<br /><span class="muted">เหตุผลข้อ 1: ${row.cauti_1_no_reason}</span>` : ''}
+            ${row.vap_4 === false && row.vap_4_no_reason ? `<br /><span class="muted">ข้อ 4 ท่านอนศีรษะสูง: ${row.vap_4_no_reason}</span>` : ''}
+          </td>
           <td><button type="button" class="danger-btn" data-id="${row.id}">ลบ</button></td>
         `;
         tbody.appendChild(tr);
@@ -353,7 +382,7 @@
         row.innerHTML = `
           <div>${item.text}</div>
           <div class="chart-track"><div class="chart-fill" style="width: ${item.yesPercent}%"></div></div>
-          <div>${item.yesCount}/${item.totalRecords} (${item.yesPercent}%)</div>
+          <div>${item.yesCount}/${item.answeredCount} (${item.yesPercent}%)</div>
         `;
         chart.appendChild(row);
       });
@@ -363,7 +392,7 @@
       const overview = document.getElementById('analyticsOverview');
       overview.innerHTML = `
         <div class="stat-card"><div class="stat-title">จำนวนเคสทั้งหมด</div><div class="stat-value">${data.totalRecords}</div></div>
-        <div class="stat-card"><div class="stat-title">ข้อที่ไม่ผ่านสูงสุด</div><div class="stat-value">${data.mostProblematic ? data.mostProblematic.noCount : 0}</div><div class="muted">จาก ${data.totalRecords} เคส (${data.mostProblematic ? data.mostProblematic.noPercent : 0}%)</div></div>
+        <div class="stat-card"><div class="stat-title">ข้อที่ไม่ผ่านสูงสุด</div><div class="stat-value">${data.mostProblematic ? data.mostProblematic.noCount : 0}</div><div class="muted">จาก ${data.mostProblematic ? data.mostProblematic.answeredCount : 0} เคสที่มีการตอบ</div></div>
       `;
     }
 

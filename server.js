@@ -24,7 +24,10 @@ if (supabaseUrl && supabaseKey) {
 
 const checklistItems = [...checklistDefinition.cauti.items, ...checklistDefinition.vap.items];
 const checklistKeys = checklistItems.map((item) => item.key);
+const cautiKeys = checklistDefinition.cauti.items.map((item) => item.key);
+const vapKeys = checklistDefinition.vap.items.map((item) => item.key);
 const itemTextByKey = Object.fromEntries(checklistItems.map((item) => [item.key, item.text]));
+
 const cauti1NoReasonOptions = [
   '1.มีการอุดตันของระบบทางเดินปัสสาวะ',
   '2.ต้องการตัวเลขที่ถูกต้องของจำนวนปัสสาวะ',
@@ -61,6 +64,12 @@ function ensureSupabase(res) {
   return true;
 }
 
+function getScopeKeys(scope) {
+  if (scope === 'cauti') return cautiKeys;
+  if (scope === 'vap') return vapKeys;
+  return checklistKeys;
+}
+
 app.get('/api/checklist-definition', (_, res) => {
   res.json(checklistDefinition);
 });
@@ -86,24 +95,42 @@ app.get('/api/patients', async (req, res) => {
 app.post('/api/checklist', async (req, res) => {
   if (!ensureSupabase(res)) return;
 
-  const { bed_no, hn, assessments, cauti_1_no_reason, vap_4_no_reason } = req.body;
+  const {
+    bed_no,
+    hn,
+    assessment_scope = 'both',
+    assessments,
+    cauti_1_no_reason,
+    vap_4_no_reason
+  } = req.body;
+
   if (!bed_no || !hn || !assessments) {
     res.status(400).json({ error: 'bed_no, hn and assessments are required.' });
     return;
   }
 
-  const assessmentDate = new Date().toISOString().slice(0, 10);
-  const payload = { assessment_date: assessmentDate, bed_no, hn };
-
-  for (const key of checklistKeys) {
-    if (typeof assessments[key] !== 'boolean') {
-      res.status(400).json({ error: `Assessment item ${key} must be boolean.` });
-      return;
-    }
-    payload[key] = assessments[key];
+  if (!['cauti', 'vap', 'both'].includes(assessment_scope)) {
+    res.status(400).json({ error: 'assessment_scope must be cauti, vap, or both.' });
+    return;
   }
 
-  if (assessments.cauti_1 === false) {
+  const requiredKeys = getScopeKeys(assessment_scope);
+  const assessmentDate = new Date().toISOString().slice(0, 10);
+  const payload = { assessment_date: assessmentDate, bed_no, hn, assessment_scope };
+
+  for (const key of checklistKeys) {
+    if (requiredKeys.includes(key)) {
+      if (typeof assessments[key] !== 'boolean') {
+        res.status(400).json({ error: `Assessment item ${key} must be boolean.` });
+        return;
+      }
+      payload[key] = assessments[key];
+    } else {
+      payload[key] = null;
+    }
+  }
+
+  if (requiredKeys.includes('cauti_1') && assessments.cauti_1 === false) {
     if (!cauti_1_no_reason || !cauti1NoReasonOptions.includes(cauti_1_no_reason)) {
       res.status(400).json({ error: 'cauti_1_no_reason is required when cauti_1 is ไม่ใช่.' });
       return;
@@ -113,7 +140,7 @@ app.post('/api/checklist', async (req, res) => {
     payload.cauti_1_no_reason = null;
   }
 
-  if (assessments.vap_4 === false) {
+  if (requiredKeys.includes('vap_4') && assessments.vap_4 === false) {
     if (!vap_4_no_reason || !vap4NoReasonOptions.includes(vap_4_no_reason)) {
       res.status(400).json({ error: 'vap_4_no_reason is required when vap_4 is ไม่ใช่.' });
       return;
@@ -158,7 +185,7 @@ app.get('/api/records', async (req, res) => {
   }
 
   if (format === 'csv') {
-    const headers = ['assessment_date', 'bed_no', 'hn', 'cauti_1_no_reason', 'vap_4_no_reason', ...checklistKeys];
+    const headers = ['assessment_date', 'bed_no', 'hn', 'assessment_scope', 'cauti_1_no_reason', 'vap_4_no_reason', ...checklistKeys];
     const rows = data.map((row) => headers.map((h) => row[h]));
     const csv = [headers.join(','), ...rows.map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
 
@@ -170,7 +197,6 @@ app.get('/api/records', async (req, res) => {
 
   res.json(data);
 });
-
 
 app.delete('/api/records/:id', async (req, res) => {
   if (!ensureSupabase(res)) return;
@@ -207,8 +233,8 @@ app.get('/api/analytics', async (req, res) => {
   const { startDate, endDate, section } = req.query;
 
   let keys = checklistKeys;
-  if (section === 'cauti') keys = checklistDefinition.cauti.items.map((item) => item.key);
-  if (section === 'vap') keys = checklistDefinition.vap.items.map((item) => item.key);
+  if (section === 'cauti') keys = cautiKeys;
+  if (section === 'vap') keys = vapKeys;
 
   const dropdownSummariesToUse = dropdownFieldDefinitions.filter((field) => {
     if (section === 'cauti') return field.triggerKey.startsWith('cauti_');
@@ -231,16 +257,18 @@ app.get('/api/analytics', async (req, res) => {
 
   const totalRecords = data.length;
   const items = keys.map((key) => {
+    const answeredCount = data.filter((row) => typeof row[key] === 'boolean').length;
     const yesCount = data.filter((row) => row[key] === true).length;
     const noCount = data.filter((row) => row[key] === false).length;
-    const yesPercent = totalRecords > 0 ? Number(((yesCount / totalRecords) * 100).toFixed(2)) : 0;
-    const noPercent = totalRecords > 0 ? Number(((noCount / totalRecords) * 100).toFixed(2)) : 0;
+    const yesPercent = answeredCount > 0 ? Number(((yesCount / answeredCount) * 100).toFixed(2)) : 0;
+    const noPercent = answeredCount > 0 ? Number(((noCount / answeredCount) * 100).toFixed(2)) : 0;
 
     return {
       key,
       text: itemTextByKey[key],
       yesCount,
       noCount,
+      answeredCount,
       totalRecords,
       yesPercent,
       noPercent
@@ -248,7 +276,7 @@ app.get('/api/analytics', async (req, res) => {
   });
 
   const mostProblematic = items.reduce((worst, item) => {
-    if (!worst || item.noPercent > worst.noPercent) return item;
+    if (!worst || item.noCount > worst.noCount) return item;
     return worst;
   }, null);
 
