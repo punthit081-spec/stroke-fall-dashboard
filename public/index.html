@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>บันทึกการประเมิน CAUTI และ VAP Bundle</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f7f8fb; color: #1f2937; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    h1,h2,h3 { margin-top: 0; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    label { font-weight: 600; }
+    select,input,button { padding: 8px 10px; border-radius: 8px; border: 1px solid #cfd6e3; }
+    button { background: #2563eb; color: #fff; border: none; cursor: pointer; }
+    button.secondary { background: #4b5563; }
+    button.danger-btn { background: #dc2626; }
+    .item { border-top: 1px solid #e5e7eb; padding: 10px 0; }
+    .choices { display: flex; gap: 16px; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; }
+    th,td { border: 1px solid #e5e7eb; padding: 8px; font-size: 14px; vertical-align: top; }
+    .muted { color: #6b7280; font-size: 13px; }
+    .success { color: #059669; }
+    .danger { color: #dc2626; font-weight: 700; }
+    .chart-row { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr 160px; gap: 10px; align-items: center; margin-bottom: 8px; }
+    .chart-track { width: 100%; background: #e5e7eb; border-radius: 999px; overflow: hidden; height: 16px; }
+    .chart-fill { height: 16px; background: #2563eb; }
+    .reason-select { margin-top: 8px; min-width: 420px; max-width: 100%; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .stat-card { background: #f3f4f6; border-radius: 10px; padding: 10px 12px; }
+    .stat-title { font-size: 12px; color: #6b7280; }
+    .stat-value { font-size: 22px; font-weight: 700; }
+    .dropdown-summary { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    .dropdown-summary ul { margin: 6px 0 0; padding-left: 18px; }
+  </style>
+</head>
+<body>
+  <h1>ระบบบันทึกการประเมิน CAUTI และ VAP Bundle</h1>
+  <p class="muted">สำหรับ Stroke Unit</p>
+
+  <div class="card">
+    <h2>บันทึกการประเมิน</h2>
+    <div class="row">
+      <div>
+        <label for="assessmentScope">เลือกแบบประเมิน</label><br />
+        <select id="assessmentScope">
+          <option value="both">CAUTI + VAP</option>
+          <option value="cauti">CAUTI เท่านั้น</option>
+          <option value="vap">VAP เท่านั้น</option>
+        </select>
+      </div>
+      <div>
+        <label for="bed">เลือกเตียง</label><br />
+        <select id="bed"><option value="">-- เลือกเตียง --</option></select>
+      </div>
+      <div>
+        <label for="hn">HN</label><br />
+        <input id="hn" placeholder="กรอก HN ด้วยตนเอง" />
+      </div>
+      <div>
+        <label>วันที่บันทึก</label><br />
+        <input id="today" readonly />
+      </div>
+      <div>
+        <label>เวลาบันทึก</label><br />
+        <input id="currentTime" readonly />
+      </div>
+      <div>
+        <label>เวร</label><br />
+        <input id="currentShift" readonly />
+      </div>
+    </div>
+    <form id="checklistForm"></form>
+    <button id="saveBtn" type="button">Save</button>
+    <p id="saveMessage" class="muted"></p>
+  </div>
+
+  <div class="card">
+    <h2>ข้อมูลย้อนหลัง (Stroke Unit)</h2>
+    <div class="row">
+      <div><label>วันที่</label><br /><input type="date" id="filterDate" /></div>
+      <div><label>เตียง</label><br /><input id="filterBed" placeholder="เช่น เตียง 1" /></div>
+      <div><label>HN</label><br /><input id="filterHN" /></div>
+      <div style="align-self:flex-end;">
+        <button type="button" id="searchBtn">ค้นหา</button>
+        <button type="button" id="exportBtn" class="secondary">Export CSV</button>
+      </div>
+    </div>
+    <div style="overflow:auto;">
+      <table id="historyTable">
+        <thead><tr><th>วันที่</th><th>เตียง</th><th>HN</th><th>รายละเอียด</th><th>จัดการ</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>สรุปผลการประเมิน (Analytics)</h2>
+    <p class="muted">เลือกช่วงวันที่ เช่น 2/2/69 - 12/2/69 เพื่อดู % และจำนวนเคสจริง</p>
+    <div class="row">
+      <div><label>ตั้งแต่วันที่</label><br /><input type="date" id="analyticsStart" /></div>
+      <div><label>ถึงวันที่</label><br /><input type="date" id="analyticsEnd" /></div>
+      <div>
+        <label>หมวด</label><br />
+        <select id="analyticsSection">
+          <option value="all">ทั้งหมด (CAUTI + VAP)</option>
+          <option value="cauti">CAUTI</option>
+          <option value="vap">VAP</option>
+        </select>
+      </div>
+      <div style="align-self:flex-end;"><button type="button" id="analyticsBtn">วิเคราะห์</button></div>
+    </div>
+    <div id="analyticsOverview" class="stats-grid"></div>
+    <p id="analyticsHighlight" class="muted"></p>
+    <div id="analyticsChart"></div>
+    <div id="analyticsDropdownSummary"></div>
+  </div>
+
+  <script>
+    const bedSelect = document.getElementById('bed');
+    const hnInput = document.getElementById('hn');
+    const todayInput = document.getElementById('today');
+    const currentTimeInput = document.getElementById('currentTime');
+    const currentShiftInput = document.getElementById('currentShift');
+    const checklistForm = document.getElementById('checklistForm');
+    const saveMessage = document.getElementById('saveMessage');
+    const assessmentScopeSelect = document.getElementById('assessmentScope');
+
+    let definition = null;
+    const cauti1NoReasonOptions = [
+      '1.มีการอุดตันของระบบทางเดินปัสสาวะ',
+      '2.ต้องการตัวเลขที่ถูกต้องของจำนวนปัสสาวะ',
+      '3.ระยะเวลานาน',
+      '4.ความถูกต้องของ I/O',
+      '5.ผ่าตัดบริเวณก้นกบ',
+      '6.ผ่าตัดระบบทางเดินปัสสาวะ',
+      '7.มีแผลบริเวณก้นกบและอวัยวะสืบพันธุ์',
+      '8.จำกัดการเคลื่อนไหวเป็นเวลานารน',
+      '6.ความสุขสบายของผู้ป่วยในระยะสุดท้าย'
+    ];
+    const vap4NoReasonOptions = ['มีข้อห้าม', 'ไม่มีข้อห้าม'];
+
+    function todayString() {
+      return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok' }).format(new Date());
+    }
+
+    function thailandTimeString() {
+      return new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Bangkok',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(new Date());
+    }
+
+    function getShiftNameByTime(timeStr) {
+      const [hh, mm] = timeStr.split(':').map(Number);
+      const totalMinutes = (hh * 60) + mm;
+      if (totalMinutes >= 481 && totalMinutes <= 960) return 'เวรเช้า (08:01-16:00)';
+      if (totalMinutes >= 961 && totalMinutes <= 1439) return 'เวรบ่าย (16:01-24:00)';
+      return 'เวรดึก (01:00-08:00)';
+    }
+
+    function getActiveSections() {
+      const scope = assessmentScopeSelect.value;
+      if (scope === 'cauti') return ['cauti'];
+      if (scope === 'vap') return ['vap'];
+      return ['cauti', 'vap'];
+    }
+
+    function createYesNoCheckboxes(key, reasonSelect = null, reasonTrigger = 'no') {
+      const wrap = document.createElement('div');
+      wrap.className = 'choices';
+
+      const yes = document.createElement('input');
+      yes.type = 'checkbox';
+      yes.id = `${key}_yes`;
+
+      const no = document.createElement('input');
+      no.type = 'checkbox';
+      no.id = `${key}_no`;
+
+      yes.addEventListener('change', () => {
+        if (yes.checked) no.checked = false;
+        if (reasonSelect) {
+          const show = reasonTrigger === 'yes' && yes.checked;
+          reasonSelect.style.display = show ? 'inline-block' : 'none';
+          if (!show) reasonSelect.value = '';
+        }
+      });
+      no.addEventListener('change', () => {
+        if (no.checked) yes.checked = false;
+        if (reasonSelect) {
+          const show = reasonTrigger === 'no' && no.checked;
+          reasonSelect.style.display = show ? 'inline-block' : 'none';
+          if (!show) reasonSelect.value = '';
+        }
+      });
+
+      const yesLabel = document.createElement('label');
+      yesLabel.htmlFor = yes.id;
+      yesLabel.textContent = 'ใช่';
+
+      const noLabel = document.createElement('label');
+      noLabel.htmlFor = no.id;
+      noLabel.textContent = 'ไม่ใช่';
+
+      wrap.append(yes, yesLabel, no, noLabel);
+      return wrap;
+    }
+
+    function createReasonSelect(id, placeholder, options) {
+      const select = document.createElement('select');
+      select.id = id;
+      select.className = 'reason-select';
+      select.style.display = 'none';
+
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = placeholder;
+      select.appendChild(defaultOption);
+
+      options.forEach((reason) => {
+        const option = document.createElement('option');
+        option.value = reason;
+        option.textContent = reason;
+        select.appendChild(option);
+      });
+
+      return select;
+    }
+
+    function renderChecklist() {
+      checklistForm.innerHTML = '';
+      const sections = getActiveSections();
+
+      sections.forEach((sectionKey) => {
+        const section = definition[sectionKey];
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `<h3>${section.title}</h3><div class="muted">หัวข้อการประเมิน</div>`;
+
+        section.items.forEach((item) => {
+          const div = document.createElement('div');
+          div.className = 'item';
+          const p = document.createElement('div');
+          p.textContent = item.text;
+          div.appendChild(p);
+
+          if (item.key === 'cauti_1') {
+            const reasonSelect = createReasonSelect('cauti_1_no_reason', '-- เลือกเหตุผลเมื่อเลือก ใช่ --', cauti1NoReasonOptions);
+            div.appendChild(createYesNoCheckboxes(item.key, reasonSelect, 'yes'));
+            div.appendChild(reasonSelect);
+          } else if (item.key === 'vap_4') {
+            const reasonSelect = createReasonSelect('vap_4_no_reason', '-- เลือกสถานะข้อห้ามเมื่อเลือก ไม่ใช่ --', vap4NoReasonOptions);
+            div.appendChild(createYesNoCheckboxes(item.key, reasonSelect));
+            div.appendChild(reasonSelect);
+          } else {
+            div.appendChild(createYesNoCheckboxes(item.key));
+          }
+
+          card.appendChild(div);
+        });
+
+        checklistForm.appendChild(card);
+      });
+    }
+
+    function collectAssessment() {
+      const result = {};
+      let cauti1NoReason = null;
+      let vap4NoReason = null;
+      const sections = getActiveSections();
+
+      for (const sectionKey of sections) {
+        for (const item of definition[sectionKey].items) {
+          const yes = document.getElementById(`${item.key}_yes`).checked;
+          const no = document.getElementById(`${item.key}_no`).checked;
+          if (!yes && !no) return { error: `กรุณาเลือก ใช่/ไม่ใช่ สำหรับ ${item.text}` };
+          result[item.key] = yes;
+
+          if (item.key === 'cauti_1' && yes) {
+            const reasonSelect = document.getElementById('cauti_1_no_reason');
+            if (!reasonSelect.value) {
+              return { error: 'กรุณาเลือกเหตุผลสำหรับข้อ 1 เมื่อเลือก ใช่' };
+            }
+            cauti1NoReason = reasonSelect.value;
+          }
+
+          if (item.key === 'vap_4' && no) {
+            const reasonSelect = document.getElementById('vap_4_no_reason');
+            if (!reasonSelect.value) {
+              return { error: 'กรุณาเลือกข้อห้ามสำหรับข้อ 4 เมื่อเลือก ไม่ใช่' };
+            }
+            vap4NoReason = reasonSelect.value;
+          }
+        }
+      }
+
+      return { data: result, cauti1NoReason, vap4NoReason };
+    }
+
+    function loadBeds() {
+      bedSelect.innerHTML = '<option value="">-- เลือกเตียง --</option>';
+      for (let i = 1; i <= 24; i += 1) {
+        const op = document.createElement('option');
+        op.value = `เตียง ${i}`;
+        op.textContent = `เตียง ${i}`;
+        bedSelect.appendChild(op);
+      }
+    }
+
+    assessmentScopeSelect.addEventListener('change', renderChecklist);
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      saveMessage.textContent = '';
+      saveMessage.className = 'muted';
+      if (!bedSelect.value || !hnInput.value) {
+        saveMessage.textContent = 'กรุณาเลือกเตียงและกรอก HN ก่อนบันทึก';
+        return;
+      }
+
+      const assessed = collectAssessment();
+      if (assessed.error) {
+        saveMessage.textContent = assessed.error;
+        return;
+      }
+
+      const res = await fetch('/api/checklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bed_no: bedSelect.value,
+          hn: hnInput.value,
+          assessment_scope: assessmentScopeSelect.value,
+          assessments: assessed.data,
+          cauti_1_no_reason: assessed.cauti1NoReason,
+          vap_4_no_reason: assessed.vap4NoReason
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        saveMessage.textContent = err.error || 'บันทึกไม่สำเร็จ';
+        return;
+      }
+
+      saveMessage.textContent = 'บันทึกสำเร็จ และแสดงในประวัติของ Stroke Unit แล้ว';
+      saveMessage.className = 'success';
+      loadHistory();
+      loadAnalytics();
+    });
+
+    async function deleteRecord(recordId) {
+      if (!confirm('ยืนยันการลบประวัติรายการนี้?')) return;
+
+      const res = await fetch(`/api/records/${recordId}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(payload.error || 'ลบข้อมูลไม่สำเร็จ');
+        return;
+      }
+
+      await loadHistory();
+      await loadAnalytics();
+    }
+
+    async function loadHistory() {
+      const date = document.getElementById('filterDate').value;
+      const bed = document.getElementById('filterBed').value;
+      const hn = document.getElementById('filterHN').value;
+
+      const params = new URLSearchParams();
+      if (date) params.append('date', date);
+      if (bed) params.append('bed', bed);
+      if (hn) params.append('hn', hn);
+
+      const res = await fetch(`/api/records?${params.toString()}`);
+      const data = await res.json();
+      const tbody = document.querySelector('#historyTable tbody');
+      tbody.innerHTML = '';
+
+      data.forEach((row) => {
+        const tr = document.createElement('tr');
+        const yesCount = Object.entries(row).filter(([k, v]) => (k.startsWith('cauti_') || k.startsWith('vap_')) && v === true).length;
+        tr.innerHTML = `
+          <td>${row.assessment_date}</td>
+          <td>${row.bed_no}</td>
+          <td>${row.hn}</td>
+          <td>
+            ประเภท: ${row.assessment_scope || 'both'}<br />
+            เวลา: ${row.assessment_time || '-'} | ${row.shift_name || '-'}<br />
+            ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ
+            ${row.cauti_1 === true && row.cauti_1_no_reason ? `<br /><span class="muted">เหตุผลข้อ 1: ${row.cauti_1_no_reason}</span>` : ''}
+            ${row.vap_4 === false && row.vap_4_no_reason ? `<br /><span class="muted">ข้อ 4 ท่านอนศีรษะสูง: ${row.vap_4_no_reason}</span>` : ''}
+          </td>
+          <td><button type="button" class="danger-btn" data-id="${row.id}">ลบ</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll('button[data-id]').forEach((button) => {
+        button.addEventListener('click', () => deleteRecord(button.dataset.id));
+      });
+    }
+
+    function renderAnalyticsChart(items) {
+      const chart = document.getElementById('analyticsChart');
+      chart.innerHTML = '';
+      items.forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'chart-row';
+        row.innerHTML = `
+          <div>${item.text}</div>
+          <div class="chart-track"><div class="chart-fill" style="width: ${item.yesPercent}%"></div></div>
+          <div>${item.yesCount}/${item.answeredCount} (${item.yesPercent}%)</div>
+        `;
+        chart.appendChild(row);
+      });
+    }
+
+    function renderAnalyticsOverview(data) {
+      const overview = document.getElementById('analyticsOverview');
+      overview.innerHTML = `
+        <div class="stat-card"><div class="stat-title">จำนวนเคสทั้งหมด</div><div class="stat-value">${data.totalRecords}</div></div>
+        <div class="stat-card"><div class="stat-title">ข้อที่ไม่ผ่านสูงสุด</div><div class="stat-value">${data.mostProblematic ? data.mostProblematic.noCount : 0}</div><div class="muted">จาก ${data.mostProblematic ? data.mostProblematic.answeredCount : 0} เคสที่มีการตอบ</div></div>
+      `;
+    }
+
+    function renderDropdownSummaries(dropdownSummaries) {
+      const wrapper = document.getElementById('analyticsDropdownSummary');
+      wrapper.innerHTML = '';
+
+      dropdownSummaries.forEach((summary) => {
+        const box = document.createElement('div');
+        box.className = 'dropdown-summary';
+
+        const title = document.createElement('div');
+        title.innerHTML = `<b>${summary.label}</b> <span class="muted">(พบกรณีตรงเงื่อนไข ${summary.totalMatchedCases}/${summary.totalRecords} เคส)</span>`;
+
+        const list = document.createElement('ul');
+        summary.options.forEach((option) => {
+          const li = document.createElement('li');
+          li.textContent = `${option.value}: ${option.count}/${summary.totalRecords} เคส (${option.percentOfAllCases}%) | ในกลุ่มเงื่อนไข ${option.percentOfMatchedCases}%`; 
+          list.appendChild(li);
+        });
+
+        box.appendChild(title);
+        box.appendChild(list);
+        wrapper.appendChild(box);
+      });
+    }
+
+    async function loadAnalytics() {
+      const startDate = document.getElementById('analyticsStart').value;
+      const endDate = document.getElementById('analyticsEnd').value;
+      const section = document.getElementById('analyticsSection').value;
+
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (section !== 'all') params.append('section', section);
+
+      const res = await fetch(`/api/analytics?${params.toString()}`);
+      const data = await res.json();
+
+      const highlight = document.getElementById('analyticsHighlight');
+      if (!data.totalRecords) {
+        highlight.textContent = 'ไม่พบข้อมูลในช่วงวันที่ที่เลือก';
+        document.getElementById('analyticsChart').innerHTML = '';
+        document.getElementById('analyticsOverview').innerHTML = '';
+        document.getElementById('analyticsDropdownSummary').innerHTML = '';
+        return;
+      }
+
+      const worst = data.mostProblematic;
+      highlight.innerHTML = `ช่วงที่เลือกมีทั้งหมด <b>${data.totalRecords}</b> ครั้งประเมิน | ข้อที่มีปัญหามากที่สุดคือ <span class="danger">${worst.text}</span> ไม่ผ่าน <b>${worst.noCount}</b> เคส (${worst.noPercent}%)`;
+      renderAnalyticsOverview(data);
+      renderAnalyticsChart(data.items);
+      renderDropdownSummaries(data.dropdownSummaries || []);
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', loadHistory);
+    document.getElementById('analyticsBtn').addEventListener('click', loadAnalytics);
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const date = document.getElementById('filterDate').value;
+      const bed = document.getElementById('filterBed').value;
+      const hn = document.getElementById('filterHN').value;
+      const params = new URLSearchParams();
+      if (date) params.append('date', date);
+      if (bed) params.append('bed', bed);
+      if (hn) params.append('hn', hn);
+      params.append('format', 'csv');
+      window.open(`/api/records?${params.toString()}`, '_blank');
+    });
+
+    async function init() {
+      todayInput.value = todayString();
+      currentTimeInput.value = thailandTimeString();
+      currentShiftInput.value = getShiftNameByTime(currentTimeInput.value);
+      document.getElementById('analyticsStart').value = todayString().slice(0, 8) + '01';
+      document.getElementById('analyticsEnd').value = todayString();
+
+      const defRes = await fetch('/api/checklist-definition');
+      definition = await defRes.json();
+      renderChecklist();
+      loadBeds();
+      await loadHistory();
+      await loadAnalytics();
+    }
+
+    init();
+  </script>
+</body>
+</html>
