@@ -12,6 +12,8 @@ create table if not exists public.patients (
 create table if not exists public.checklist_records (
   id bigint generated always as identity primary key,
   assessment_date date not null default current_date,
+  assessment_time time,
+  shift_name text,
   bed_no text not null,
   hn text not null,
   assessment_scope text not null default 'both',
@@ -38,6 +40,8 @@ create table if not exists public.checklist_records (
 );
 
 alter table public.checklist_records add column if not exists assessment_scope text not null default 'both';
+alter table public.checklist_records add column if not exists assessment_time time;
+alter table public.checklist_records add column if not exists shift_name text;
 alter table public.checklist_records add column if not exists cauti_1_no_reason text;
 alter table public.checklist_records add column if not exists vap_4_no_reason text;
 alter table public.checklist_records add column if not exists cauti_7 boolean not null default false;

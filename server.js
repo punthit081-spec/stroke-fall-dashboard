@@ -72,6 +72,27 @@ function getScopeKeys(scope) {
   return checklistKeys;
 }
 
+function thailandDateString() {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok' }).format(new Date());
+}
+
+function thailandTimeString() {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(new Date());
+}
+
+function shiftNameByTime(timeStr) {
+  const [hh, mm] = timeStr.split(':').map(Number);
+  const totalMinutes = (hh * 60) + mm;
+  if (totalMinutes >= 481 && totalMinutes <= 960) return 'เวรเช้า';
+  if (totalMinutes >= 961 && totalMinutes <= 1439) return 'เวรบ่าย';
+  return 'เวรดึก';
+}
+
 app.get('/api/checklist-definition', (_, res) => {
   res.json(checklistDefinition);
 });
@@ -117,8 +138,10 @@ app.post('/api/checklist', async (req, res) => {
   }
 
   const requiredKeys = getScopeKeys(assessment_scope);
-  const assessmentDate = new Date().toISOString().slice(0, 10);
-  const payload = { assessment_date: assessmentDate, bed_no, hn, assessment_scope };
+  const assessmentDate = thailandDateString();
+  const assessmentTime = thailandTimeString();
+  const shiftName = shiftNameByTime(assessmentTime);
+  const payload = { assessment_date: assessmentDate, assessment_time: assessmentTime, shift_name: shiftName, bed_no, hn, assessment_scope };
 
   for (const key of checklistKeys) {
     if (requiredKeys.includes(key)) {
@@ -187,7 +210,7 @@ app.get('/api/records', async (req, res) => {
   }
 
   if (format === 'csv') {
-    const headers = ['assessment_date', 'bed_no', 'hn', 'assessment_scope', 'cauti_1_no_reason', 'vap_4_no_reason', ...checklistKeys];
+    const headers = ['assessment_date', 'assessment_time', 'shift_name', 'bed_no', 'hn', 'assessment_scope', 'cauti_1_no_reason', 'vap_4_no_reason', ...checklistKeys];
     const rows = data.map((row) => headers.map((h) => row[h]));
     const csv = [headers.join(','), ...rows.map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
 

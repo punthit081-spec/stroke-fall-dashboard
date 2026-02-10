@@ -60,6 +60,14 @@
         <label>วันที่บันทึก</label><br />
         <input id="today" readonly />
       </div>
+      <div>
+        <label>เวลาบันทึก</label><br />
+        <input id="currentTime" readonly />
+      </div>
+      <div>
+        <label>เวร</label><br />
+        <input id="currentShift" readonly />
+      </div>
     </div>
     <form id="checklistForm"></form>
     <button id="saveBtn" type="button">Save</button>
@@ -111,6 +119,8 @@
     const bedSelect = document.getElementById('bed');
     const hnInput = document.getElementById('hn');
     const todayInput = document.getElementById('today');
+    const currentTimeInput = document.getElementById('currentTime');
+    const currentShiftInput = document.getElementById('currentShift');
     const checklistForm = document.getElementById('checklistForm');
     const saveMessage = document.getElementById('saveMessage');
     const assessmentScopeSelect = document.getElementById('assessmentScope');
@@ -130,7 +140,24 @@
     const vap4NoReasonOptions = ['มีข้อห้าม', 'ไม่มีข้อห้าม'];
 
     function todayString() {
-      return new Date().toISOString().slice(0, 10);
+      return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok' }).format(new Date());
+    }
+
+    function thailandTimeString() {
+      return new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Bangkok',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(new Date());
+    }
+
+    function getShiftNameByTime(timeStr) {
+      const [hh, mm] = timeStr.split(':').map(Number);
+      const totalMinutes = (hh * 60) + mm;
+      if (totalMinutes >= 481 && totalMinutes <= 960) return 'เวรเช้า (08:01-16:00)';
+      if (totalMinutes >= 961 && totalMinutes <= 1439) return 'เวรบ่าย (16:01-24:00)';
+      return 'เวรดึก (01:00-08:00)';
     }
 
     function getActiveSections() {
@@ -361,6 +388,7 @@
           <td>${row.hn}</td>
           <td>
             ประเภท: ${row.assessment_scope || 'both'}<br />
+            เวลา: ${row.assessment_time || '-'} | ${row.shift_name || '-'}<br />
             ผ่านเกณฑ์ ใช่ ${yesCount} ข้อ
             ${row.cauti_1 === true && row.cauti_1_no_reason ? `<br /><span class="muted">เหตุผลข้อ 1: ${row.cauti_1_no_reason}</span>` : ''}
             ${row.vap_4 === false && row.vap_4_no_reason ? `<br /><span class="muted">ข้อ 4 ท่านอนศีรษะสูง: ${row.vap_4_no_reason}</span>` : ''}
@@ -468,6 +496,8 @@
 
     async function init() {
       todayInput.value = todayString();
+      currentTimeInput.value = thailandTimeString();
+      currentShiftInput.value = getShiftNameByTime(currentTimeInput.value);
       document.getElementById('analyticsStart').value = todayString().slice(0, 8) + '01';
       document.getElementById('analyticsEnd').value = todayString();
 
