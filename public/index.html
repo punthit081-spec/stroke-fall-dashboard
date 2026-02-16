@@ -5,33 +5,84 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>บันทึกการประเมิน CAUTI และ VAP Bundle</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f7f8fb; color: #1f2937; }
-    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    :root {
+      --bg: #eef2ff;
+      --card: #ffffff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --primary-soft: #dbeafe;
+      --danger: #dc2626;
+      --border: #e2e8f0;
+      --success: #059669;
+    }
+    body {
+      font-family: "Noto Sans Thai", Arial, sans-serif;
+      margin: 20px;
+      background: radial-gradient(circle at top right, #e0e7ff, var(--bg));
+      color: var(--ink);
+    }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, .08);
+      border: 1px solid var(--border);
+    }
     h1,h2,h3 { margin-top: 0; }
+    h1 { margin-bottom: 6px; }
     .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
     label { font-weight: 600; }
-    select,input,button { padding: 8px 10px; border-radius: 8px; border: 1px solid #cfd6e3; }
-    button { background: #2563eb; color: #fff; border: none; cursor: pointer; }
-    button.secondary { background: #4b5563; }
-    button.danger-btn { background: #dc2626; }
-    .item { border-top: 1px solid #e5e7eb; padding: 10px 0; }
-    .choices { display: flex; gap: 16px; margin-top: 6px; }
+    select,input,button {
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      font-size: 14px;
+    }
+    input:focus,select:focus { outline: 2px solid var(--primary-soft); border-color: var(--primary); }
+    button {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: .15s ease;
+    }
+    button:hover { transform: translateY(-1px); filter: brightness(1.03); }
+    button.secondary { background: #475569; }
+    button.danger-btn { background: var(--danger); }
+    button.ghost { background: #0ea5e9; }
+    .item { border-top: 1px dashed var(--border); padding: 10px 0; }
+    .choices { display: flex; gap: 16px; margin-top: 6px; align-items: center; }
     table { width: 100%; border-collapse: collapse; }
-    th,td { border: 1px solid #e5e7eb; padding: 8px; font-size: 14px; vertical-align: top; }
-    .muted { color: #6b7280; font-size: 13px; }
-    .success { color: #059669; }
-    .danger { color: #dc2626; font-weight: 700; }
-    .chart-row { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr 160px; gap: 10px; align-items: center; margin-bottom: 8px; }
+    th,td { border: 1px solid var(--border); padding: 8px; font-size: 14px; vertical-align: top; }
+    th { background: #f8fafc; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .success { color: var(--success); }
+    .danger { color: var(--danger); font-weight: 700; }
+    .chart-row { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr 170px; gap: 10px; align-items: center; margin-bottom: 8px; }
     .chart-track { width: 100%; background: #e5e7eb; border-radius: 999px; overflow: hidden; height: 16px; }
-    .chart-fill { height: 16px; background: #2563eb; }
+    .chart-fill { height: 16px; background: linear-gradient(90deg, #2563eb, #38bdf8); }
     .reason-select { margin-top: 8px; min-width: 420px; max-width: 100%; }
     .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px; }
-    .stat-card { background: #f3f4f6; border-radius: 10px; padding: 10px 12px; }
-    .stat-title { font-size: 12px; color: #6b7280; }
+    .stat-card { background: #f8fafc; border-radius: 12px; padding: 12px; border: 1px solid var(--border); }
+    .stat-title { font-size: 12px; color: var(--muted); }
     .stat-value { font-size: 22px; font-weight: 700; }
-    .dropdown-summary { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    .dropdown-summary { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
     .dropdown-summary ul { margin: 6px 0 0; padding-left: 18px; }
-  </style>
+    .action-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0 4px; }
+    .pie-wrap { display: grid; grid-template-columns: 170px 1fr; gap: 14px; align-items: center; margin: 8px 0 16px; }
+    .pie-chart {
+      width: 160px; height: 160px; border-radius: 999px;
+      background: conic-gradient(#22c55e 0deg, #22c55e 180deg, #ef4444 180deg, #ef4444 360deg);
+      border: 8px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.08);
+    }
+    .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 14px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .dot.yes { background: #22c55e; }
+    .dot.no { background: #ef4444; }
+</style>
 </head>
 <body>
   <h1>ระบบบันทึกการประเมิน CAUTI และ VAP Bundle</h1>
@@ -70,7 +121,10 @@
       </div>
     </div>
     <form id="checklistForm"></form>
-    <button id="saveBtn" type="button">Save</button>
+    <div class="action-row">
+      <button id="checkAllYesBtn" class="ghost" type="button">ติ๊กใช่ทั้งหมด</button>
+      <button id="saveBtn" type="button">Save</button>
+    </div>
     <p id="saveMessage" class="muted"></p>
   </div>
 
@@ -111,6 +165,7 @@
     </div>
     <div id="analyticsOverview" class="stats-grid"></div>
     <p id="analyticsHighlight" class="muted"></p>
+    <div id="analyticsPie" class="pie-wrap"></div>
     <div id="analyticsChart"></div>
     <div id="analyticsDropdownSummary"></div>
   </div>
@@ -311,6 +366,21 @@
 
     assessmentScopeSelect.addEventListener('change', renderChecklist);
 
+
+    function selectAllYes() {
+      const sections = getActiveSections();
+      sections.forEach((sectionKey) => {
+        definition[sectionKey].items.forEach((item) => {
+          const yes = document.getElementById(`${item.key}_yes`);
+          if (yes) {
+            yes.checked = true;
+            yes.dispatchEvent(new Event('change'));
+          }
+        });
+      });
+    }
+
+    document.getElementById('checkAllYesBtn').addEventListener('click', selectAllYes);
     document.getElementById('saveBtn').addEventListener('click', async () => {
       saveMessage.textContent = '';
       saveMessage.className = 'muted';
@@ -403,6 +473,31 @@
       });
     }
 
+    function renderAnalyticsPie(items) {
+      const pie = document.getElementById('analyticsPie');
+      const totalYes = items.reduce((sum, item) => sum + (item.yesCount || 0), 0);
+      const totalNo = items.reduce((sum, item) => sum + (item.noCount || 0), 0);
+      const total = totalYes + totalNo;
+
+      if (!total) {
+        pie.innerHTML = '<p class="muted">ไม่มีข้อมูลพอสำหรับ Pie Chart</p>';
+        return;
+      }
+
+      const yesDeg = (totalYes / total) * 360;
+      const yesPct = ((totalYes / total) * 100).toFixed(2);
+      const noPct = ((totalNo / total) * 100).toFixed(2);
+
+      pie.innerHTML = `
+        <div class="pie-chart" style="background: conic-gradient(#22c55e 0deg, #22c55e ${yesDeg}deg, #ef4444 ${yesDeg}deg, #ef4444 360deg);"></div>
+        <div>
+          <div class="legend-item"><span class="dot yes"></span>ผ่านเกณฑ์ (ใช่): ${totalYes}/${total} (${yesPct}%)</div>
+          <div class="legend-item"><span class="dot no"></span>ไม่ผ่านเกณฑ์ (ไม่ใช่): ${totalNo}/${total} (${noPct}%)</div>
+          <p class="muted">สรุปรวมทุกหัวข้อจากช่วงวันที่ที่เลือก</p>
+        </div>
+      `;
+    }
+
     function renderAnalyticsChart(items) {
       const chart = document.getElementById('analyticsChart');
       chart.innerHTML = '';
@@ -468,6 +563,7 @@
         highlight.textContent = 'ไม่พบข้อมูลในช่วงวันที่ที่เลือก';
         document.getElementById('analyticsChart').innerHTML = '';
         document.getElementById('analyticsOverview').innerHTML = '';
+        document.getElementById('analyticsPie').innerHTML = '';
         document.getElementById('analyticsDropdownSummary').innerHTML = '';
         return;
       }
@@ -475,6 +571,7 @@
       const worst = data.mostProblematic;
       highlight.innerHTML = `ช่วงที่เลือกมีทั้งหมด <b>${data.totalRecords}</b> ครั้งประเมิน | ข้อที่มีปัญหามากที่สุดคือ <span class="danger">${worst.text}</span> ไม่ผ่าน <b>${worst.noCount}</b> เคส (${worst.noPercent}%)`;
       renderAnalyticsOverview(data);
+      renderAnalyticsPie(data.items);
       renderAnalyticsChart(data.items);
       renderDropdownSummaries(data.dropdownSummaries || []);
     }
