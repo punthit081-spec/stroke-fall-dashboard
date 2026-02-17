@@ -6,96 +6,303 @@
 
 <style>
 body {
-    margin:0;
-    background:black;
-    font-family:Arial, sans-serif;
-    color:white;
+    margin: 0;
+    background: black;
+    font-family: Arial, sans-serif;
+    color: white;
 }
 
 h1 {
-    text-align:center;
-    padding:20px;
-    font-size:40px;
+    text-align: center;
+    padding: 20px;
+    font-size: 40px;
+    margin: 0;
 }
 
-.header, .row {
-    display:grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
-    padding:15px;
-    align-items:center;
+.title-bar {
+    position: relative;
+}
+
+.current-count {
+    position: absolute;
+    top: 24px;
+    right: 28px;
+    font-size: 22px;
+    background: #1f1f1f;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #6fd3ff;
+}
+
+.header,
+.row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.2fr 1.3fr 1fr 2fr;
+    padding: 15px;
+    align-items: center;
+    column-gap: 12px;
 }
 
 .header {
-    background:#222;
-    font-size:22px;
-    font-weight:bold;
+    background: #222;
+    font-size: 22px;
+    font-weight: bold;
 }
 
 .row {
-    border-bottom:1px solid #333;
-    font-size:20px;
+    border-bottom: 1px solid #333;
+    font-size: 20px;
 }
 
-.row:nth-child(even){
-    background:#111;
+.row:nth-child(even) {
+    background: #111;
 }
 
-.low { color:lime; }
-.moderate { color:orange; }
-.high { color:red; }
+.mental-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 17px;
+}
+
+.mental-toggle input {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.score-note {
+    font-size: 14px;
+    color: #9ec0ff;
+    margin-top: 4px;
+}
+
+.bed-update {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.new-bed-input {
+    width: 90px;
+    font-size: 15px;
+    padding: 7px 8px;
+    border-radius: 6px;
+    border: 1px solid #666;
+    background: #151515;
+    color: white;
+}
+
+.update-bed-btn {
+    font-size: 14px;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: #2c78ff;
+    color: white;
+    cursor: pointer;
+}
+
+.update-status {
+    min-height: 18px;
+    font-size: 13px;
+    color: #84ff92;
+}
+
+.update-status.error {
+    color: #ff8c8c;
+}
+
+.low { color: lime; }
+.moderate { color: orange; }
+.high { color: red; }
 
 .dot {
-    font-size:22px;
+    font-size: 22px;
 }
 </style>
 </head>
 
 <body>
 
-<h1>Stroke Unit Fall Monitor</h1>
+<div class="title-bar">
+    <h1>Stroke Unit Fall Monitor</h1>
+    <div id="currentCount" class="current-count">จำนวนคนปัจจุบัน: 0</div>
+</div>
 
 <div class="header">
     <div>ชื่อ</div>
     <div>เตียง</div>
     <div>Fall Score</div>
+    <div>สับสนวุ่นวาย (+15)</div>
     <div>Risk</div>
+    <div>Update Bed</div>
 </div>
 
 <div id="data"></div>
 
 <script>
 const sheetURL = "https://opensheet.elk.sh/1dc_L7he2jDu64q8OBGbCEnf2gcrJ16nn7-NiwvbOXW4/dashboard";
+const UPDATE_BED_URL = "https://script.google.com/macros/s/AKfycbxX_LiB1CDKpPNelAx6VyODOtOls3nZN6_fEdvi3VhGo-7AQZuhOwikeGtpDNQoGt82/exec";
+const MENTAL_SCORE_BONUS = 15;
+const CONFUSION_STORAGE_KEY = "fallMonitorConfusionByPatient";
 
-function loadData(){
-    fetch(sheetURL)
-    .then(res => res.json())
-    .then(data => {
+let latestRows = [];
+const confusionMap = loadConfusionMap();
 
-        const table = document.getElementById("data");
-        table.innerHTML = "";
+function loadConfusionMap() {
+    try {
+        const raw = localStorage.getItem(CONFUSION_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (error) {
+        return {};
+    }
+}
 
-        data.forEach(row => {
+function saveConfusionMap() {
+    localStorage.setItem(CONFUSION_STORAGE_KEY, JSON.stringify(confusionMap));
+}
 
-            if(!row.Name) return;
+function getPatientKey(row) {
+    return `${row.Bed || "-"}|${row.Name || "-"}`;
+}
 
-            let riskClass = "low";
-            if(row.Risk === "Moderate") riskClass = "moderate";
-            if(row.Risk === "High") riskClass = "high";
+function getPatientId(row) {
+    return row.PatientID || row.patientID || getPatientKey(row);
+}
 
-            table.innerHTML += `
-                <div class="row">
-                    <div>${row.Name}</div>
-                    <div>${row.Bed}</div>
-                    <div>${row.FallTotal}</div>
-                    <div class="${riskClass}">
-                        <span class="dot">●</span> ${row.Risk}
-                    </div>
+function parseScore(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getRiskFromScore(score, fallbackRisk) {
+    if (Number.isFinite(score)) {
+        if (score >= 45) return { label: "High", className: "high" };
+        if (score >= 25) return { label: "Moderate", className: "moderate" };
+        return { label: "Low", className: "low" };
+    }
+
+    const fallback = (fallbackRisk || "Low").toLowerCase();
+    if (fallback === "high") return { label: "High", className: "high" };
+    if (fallback === "moderate") return { label: "Moderate", className: "moderate" };
+    return { label: "Low", className: "low" };
+}
+
+function renderRows(data) {
+    const table = document.getElementById("data");
+    const countDisplay = document.getElementById("currentCount");
+
+    table.innerHTML = "";
+    let currentCount = 0;
+
+    data.forEach((row) => {
+        if (!row.Name) return;
+
+        currentCount += 1;
+        const patientKey = getPatientKey(row);
+        const patientId = getPatientId(row);
+        const confused = Boolean(confusionMap[patientKey]);
+
+        const baseScore = parseScore(row.FallTotal);
+        const adjustedScore = baseScore + (confused ? MENTAL_SCORE_BONUS : 0);
+        const risk = getRiskFromScore(adjustedScore, row.Risk);
+
+        table.innerHTML += `
+            <div class="row" data-patient-id="${patientId}">
+                <div>${row.Name}</div>
+                <div>${row.Bed}</div>
+                <div>
+                    <div>${adjustedScore}</div>
+                    <div class="score-note">base ${baseScore}${confused ? ` + ${MENTAL_SCORE_BONUS}` : ""}</div>
                 </div>
-            `;
+                <label class="mental-toggle">
+                    <input type="checkbox" data-patient-key="${patientKey}" ${confused ? "checked" : ""}>
+                    <span>${confused ? "มี" : "ไม่มี"}</span>
+                </label>
+                <div class="${risk.className}">
+                    <span class="dot">●</span> ${risk.label}
+                </div>
+                <div class="bed-update">
+                    <input class="new-bed-input" type="text" placeholder="เตียงใหม่" aria-label="New bed number for ${row.Name}">
+                    <button class="update-bed-btn" type="button">Update Bed</button>
+                    <div class="update-status" aria-live="polite"></div>
+                </div>
+            </div>
+        `;
+    });
+
+    countDisplay.textContent = `จำนวนคนปัจจุบัน: ${currentCount}`;
+}
+
+function loadData() {
+    fetch(sheetURL)
+        .then((res) => res.json())
+        .then((data) => {
+            latestRows = data;
+            renderRows(data);
+        });
+}
+
+document.getElementById("data").addEventListener("change", (event) => {
+    const checkbox = event.target;
+    if (!(checkbox instanceof HTMLInputElement) || checkbox.type !== "checkbox") return;
+
+    const patientKey = checkbox.dataset.patientKey;
+    if (!patientKey) return;
+
+    confusionMap[patientKey] = checkbox.checked;
+    saveConfusionMap();
+    renderRows(latestRows);
+});
+
+document.getElementById("data").addEventListener("click", async (event) => {
+    const button = event.target.closest(".update-bed-btn");
+    if (!button) return;
+
+    const rowEl = button.closest(".row");
+    if (!rowEl) return;
+
+    const input = rowEl.querySelector(".new-bed-input");
+    const statusEl = rowEl.querySelector(".update-status");
+    if (!input || !statusEl) return;
+
+    const patientID = rowEl.dataset.patientId;
+    const newBed = input.value.trim();
+
+    statusEl.classList.remove("error");
+
+    if (!patientID || !newBed) {
+        statusEl.textContent = "กรุณาระบุเตียงใหม่";
+        statusEl.classList.add("error");
+        return;
+    }
+
+    button.disabled = true;
+    statusEl.textContent = "กำลังอัปเดต...";
+
+    try {
+        const response = await fetch(UPDATE_BED_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ patientID, newBed })
         });
 
-    });
-}
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        statusEl.textContent = "Bed updated!";
+        input.value = "";
+    } catch (error) {
+        statusEl.textContent = "อัปเดตไม่สำเร็จ";
+        statusEl.classList.add("error");
+    } finally {
+        button.disabled = false;
+    }
+});
 
 loadData();
 setInterval(loadData, 5000); // refresh ทุก 5 วิ
@@ -103,4 +310,3 @@ setInterval(loadData, 5000); // refresh ทุก 5 วิ
 
 </body>
 </html>
-
