@@ -35,10 +35,24 @@ h1 {
     color: #6fd3ff;
 }
 
+.toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 20px 10px;
+}
+
+.show-discharged-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #cccccc;
+    font-size: 15px;
+}
+
 .header,
 .row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1.2fr 1.3fr 1fr 2fr;
+    grid-template-columns: 2fr 1.2fr 1.4fr 1.1fr 1.3fr 1fr 1fr;
     padding: 15px;
     align-items: center;
     column-gap: 12px;
@@ -78,41 +92,29 @@ h1 {
     margin-top: 4px;
 }
 
-.bed-update {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.new-bed-input {
-    width: 90px;
+.current-bed-select {
+    width: 100%;
+    max-width: 140px;
     font-size: 15px;
-    padding: 7px 8px;
+    padding: 6px 8px;
     border-radius: 6px;
     border: 1px solid #666;
     background: #151515;
     color: white;
 }
 
-.update-bed-btn {
+.discharge-btn {
     font-size: 14px;
     padding: 7px 10px;
-    border: 0;
+    border: 1px solid #666;
     border-radius: 6px;
-    background: #2c78ff;
-    color: white;
+    background: #2a2a2a;
+    color: #ffb3b3;
     cursor: pointer;
 }
 
-.update-status {
-    min-height: 18px;
-    font-size: 13px;
-    color: #84ff92;
-}
-
-.update-status.error {
-    color: #ff8c8c;
+.discharge-btn:hover {
+    background: #402424;
 }
 
 .low { color: lime; }
@@ -132,45 +134,68 @@ h1 {
     <div id="currentCount" class="current-count">จำนวนคนปัจจุบัน: 0</div>
 </div>
 
+<div class="toolbar">
+    <label class="show-discharged-toggle">
+        <input id="showDischarged" type="checkbox">
+        แสดงผู้ป่วยกลับบ้านแล้ว
+    </label>
+</div>
+
 <div class="header">
     <div>ชื่อ</div>
-    <div>เตียง</div>
+    <div>เตียงแรกรับ</div>
+    <div>เตียงปัจจุบัน</div>
     <div>Fall Score</div>
     <div>สับสนวุ่นวาย (+15)</div>
     <div>Risk</div>
-    <div>Update Bed</div>
+    <div>จำหน่าย</div>
 </div>
 
 <div id="data"></div>
 
 <script>
 const sheetURL = "https://opensheet.elk.sh/1dc_L7he2jDu64q8OBGbCEnf2gcrJ16nn7-NiwvbOXW4/dashboard";
-const UPDATE_BED_URL = "https://script.google.com/macros/s/AKfycbxuhR5W3RpgI7LqdIQ1-2FdntISqIG4nOHoZmOYk2N7GzZyFx8DTRhceQbUqBnfjK__/exec";
 const MENTAL_SCORE_BONUS = 15;
 const CONFUSION_STORAGE_KEY = "fallMonitorConfusionByPatient";
+const CURRENT_BED_STORAGE_KEY = "fallMonitorCurrentBedByPatient";
+const DISCHARGED_STORAGE_KEY = "fallMonitorDischargedByPatient";
+const SHOW_DISCHARGED_STORAGE_KEY = "fallMonitorShowDischarged";
 
 let latestRows = [];
-const confusionMap = loadConfusionMap();
+const confusionMap = loadMap(CONFUSION_STORAGE_KEY);
+const currentBedMap = loadMap(CURRENT_BED_STORAGE_KEY);
+const dischargedMap = loadMap(DISCHARGED_STORAGE_KEY);
+let showDischarged = loadBoolean(SHOW_DISCHARGED_STORAGE_KEY, false);
 
-function loadConfusionMap() {
+function loadMap(storageKey) {
     try {
-        const raw = localStorage.getItem(CONFUSION_STORAGE_KEY);
+        const raw = localStorage.getItem(storageKey);
         return raw ? JSON.parse(raw) : {};
     } catch (error) {
         return {};
     }
 }
 
-function saveConfusionMap() {
-    localStorage.setItem(CONFUSION_STORAGE_KEY, JSON.stringify(confusionMap));
+function loadBoolean(storageKey, fallbackValue) {
+    try {
+        const raw = localStorage.getItem(storageKey);
+        if (raw === null) return fallbackValue;
+        return raw === "true";
+    } catch (error) {
+        return fallbackValue;
+    }
+}
+
+function saveMap(storageKey, payload) {
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+}
+
+function saveBoolean(storageKey, value) {
+    localStorage.setItem(storageKey, value ? "true" : "false");
 }
 
 function getPatientKey(row) {
     return `${row.Bed || "-"}|${row.Name || "-"}`;
-}
-
-function getPatientId(row) {
-    return row.PatientID || row.patientID || getPatientKey(row);
 }
 
 function parseScore(value) {
@@ -191,6 +216,17 @@ function getRiskFromScore(score, fallbackRisk) {
     return { label: "Low", className: "low" };
 }
 
+function getBedOptions(initialBed) {
+    const normalizedInitial = (initialBed || "-").toString();
+    const options = new Set([normalizedInitial]);
+
+    for (let bedNo = 1; bedNo <= 30; bedNo += 1) {
+        options.add(String(bedNo));
+    }
+
+    return [...options];
+}
+
 function renderRows(data) {
     const table = document.getElementById("data");
     const countDisplay = document.getElementById("currentCount");
@@ -201,19 +237,33 @@ function renderRows(data) {
     data.forEach((row) => {
         if (!row.Name) return;
 
-        currentCount += 1;
         const patientKey = getPatientKey(row);
-        const patientId = getPatientId(row);
+        const isDischarged = Boolean(dischargedMap[patientKey]);
+        if (!showDischarged && isDischarged) return;
+
+        currentCount += 1;
+
         const confused = Boolean(confusionMap[patientKey]);
 
         const baseScore = parseScore(row.FallTotal);
         const adjustedScore = baseScore + (confused ? MENTAL_SCORE_BONUS : 0);
         const risk = getRiskFromScore(adjustedScore, row.Risk);
 
+        const initialBed = (row.Bed || "-").toString();
+        const selectedCurrentBed = currentBedMap[patientKey] || initialBed;
+        const bedOptionsHtml = getBedOptions(initialBed)
+            .map((bed) => `<option value="${bed}" ${bed === selectedCurrentBed ? "selected" : ""}>${bed}</option>`)
+            .join("");
+
         table.innerHTML += `
-            <div class="row" data-patient-id="${patientId}">
+            <div class="row">
                 <div>${row.Name}</div>
-                <div>${row.Bed}</div>
+                <div>${initialBed}</div>
+                <div>
+                    <select class="current-bed-select" data-patient-key="${patientKey}" aria-label="เตียงปัจจุบันของ ${row.Name}">
+                        ${bedOptionsHtml}
+                    </select>
+                </div>
                 <div>
                     <div>${adjustedScore}</div>
                     <div class="score-note">base ${baseScore}${confused ? ` + ${MENTAL_SCORE_BONUS}` : ""}</div>
@@ -225,10 +275,10 @@ function renderRows(data) {
                 <div class="${risk.className}">
                     <span class="dot">●</span> ${risk.label}
                 </div>
-                <div class="bed-update">
-                    <input class="new-bed-input" type="text" placeholder="เตียงใหม่" aria-label="New bed number for ${row.Name}">
-                    <button class="update-bed-btn" type="button">Update Bed</button>
-                    <div class="update-status" aria-live="polite"></div>
+                <div>
+                    <button type="button" class="discharge-btn" data-patient-key="${patientKey}">
+                        ${isDischarged ? "กู้กลับ" : "กลับบ้าน"}
+                    </button>
                 </div>
             </div>
         `;
@@ -246,59 +296,45 @@ function loadData() {
         });
 }
 
-document.getElementById("data").addEventListener("change", (event) => {
-    const checkbox = event.target;
-    if (!(checkbox instanceof HTMLInputElement) || checkbox.type !== "checkbox") return;
+document.getElementById("showDischarged").checked = showDischarged;
 
-    const patientKey = checkbox.dataset.patientKey;
-    if (!patientKey) return;
-
-    confusionMap[patientKey] = checkbox.checked;
-    saveConfusionMap();
+document.getElementById("showDischarged").addEventListener("change", (event) => {
+    showDischarged = event.target.checked;
+    saveBoolean(SHOW_DISCHARGED_STORAGE_KEY, showDischarged);
     renderRows(latestRows);
 });
 
-document.getElementById("data").addEventListener("click", async (event) => {
-    const button = event.target.closest(".update-bed-btn");
-    if (!button) return;
+document.getElementById("data").addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
 
-    const rowEl = button.closest(".row");
-    if (!rowEl) return;
+    const patientKey = target.dataset.patientKey;
+    if (!patientKey) return;
 
-    const input = rowEl.querySelector(".new-bed-input");
-    const statusEl = rowEl.querySelector(".update-status");
-    if (!input || !statusEl) return;
-
-    const patientID = rowEl.dataset.patientId;
-    const newBed = input.value.trim();
-
-    statusEl.classList.remove("error");
-
-    if (!patientID || !newBed) {
-        statusEl.textContent = "กรุณาระบุเตียงใหม่";
-        statusEl.classList.add("error");
+    if (target instanceof HTMLInputElement && target.type === "checkbox") {
+        confusionMap[patientKey] = target.checked;
+        saveMap(CONFUSION_STORAGE_KEY, confusionMap);
+        renderRows(latestRows);
         return;
     }
 
-    button.disabled = true;
-    statusEl.textContent = "กำลังอัปเดต...";
-
-    try {
-        await fetch(UPDATE_BED_URL, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ patientID, newBed })
-        });
-
-        statusEl.textContent = "Bed updated!";
-        input.value = "";
-    } catch (error) {
-        statusEl.textContent = "อัปเดตไม่สำเร็จ";
-        statusEl.classList.add("error");
-    } finally {
-        button.disabled = false;
+    if (target instanceof HTMLSelectElement && target.classList.contains("current-bed-select")) {
+        currentBedMap[patientKey] = target.value;
+        saveMap(CURRENT_BED_STORAGE_KEY, currentBedMap);
     }
+});
+
+document.getElementById("data").addEventListener("click", (event) => {
+    const button = event.target.closest(".discharge-btn");
+    if (!button) return;
+
+    const patientKey = button.dataset.patientKey;
+    if (!patientKey) return;
+
+    const currentlyDischarged = Boolean(dischargedMap[patientKey]);
+    dischargedMap[patientKey] = !currentlyDischarged;
+    saveMap(DISCHARGED_STORAGE_KEY, dischargedMap);
+    renderRows(latestRows);
 });
 
 loadData();
