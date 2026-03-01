@@ -227,6 +227,29 @@ function getBedOptions(initialBed) {
     return [...options];
 }
 
+function compareCurrentBed(a, b) {
+    const aKey = getPatientKey(a);
+    const bKey = getPatientKey(b);
+
+    const aInitialBed = (a.Bed || "-").toString();
+    const bInitialBed = (b.Bed || "-").toString();
+    const aBed = (currentBedMap[aKey] || aInitialBed).toString();
+    const bBed = (currentBedMap[bKey] || bInitialBed).toString();
+
+    const aNum = Number(aBed);
+    const bNum = Number(bBed);
+    const aIsNum = Number.isFinite(aNum);
+    const bIsNum = Number.isFinite(bNum);
+
+    if (aIsNum && bIsNum && aNum !== bNum) return aNum - bNum;
+    if (aIsNum !== bIsNum) return aIsNum ? -1 : 1;
+
+    const bedCompare = aBed.localeCompare(bBed, "th", { numeric: true, sensitivity: "base" });
+    if (bedCompare !== 0) return bedCompare;
+
+    return (a.Name || "").localeCompare(b.Name || "th", { sensitivity: "base" });
+}
+
 function renderRows(data) {
     const table = document.getElementById("data");
     const countDisplay = document.getElementById("currentCount");
@@ -234,7 +257,9 @@ function renderRows(data) {
     table.innerHTML = "";
     let currentCount = 0;
 
-    data.forEach((row) => {
+    const sortedRows = [...data].sort(compareCurrentBed);
+
+    sortedRows.forEach((row) => {
         if (!row.Name) return;
 
         const patientKey = getPatientKey(row);
@@ -321,6 +346,7 @@ document.getElementById("data").addEventListener("change", (event) => {
     if (target instanceof HTMLSelectElement && target.classList.contains("current-bed-select")) {
         currentBedMap[patientKey] = target.value;
         saveMap(CURRENT_BED_STORAGE_KEY, currentBedMap);
+        renderRows(latestRows);
     }
 });
 
